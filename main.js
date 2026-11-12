@@ -197,7 +197,7 @@ const U = {
 const loadBar = document.getElementById('loadBar');
 const loadText = document.getElementById('loadText');
 const progress = {};
-const EXPECTED = { cow: 5.8e6, farm: 2.3e6, wheat: 9.0e6, grass: 14.5e6, barn: 18.6e6, chapel: 8.7e6, windmill: 2.4e6, birch_mid: 3.2e6, birch_far: 0.9e6, bare: 0.55e6, house: 7.9e6, bale: 0.33e6, bull: 4.82e6, tractor: 6.7e6, harvest: 5.13e6, truck: 4.5e6, trough: 4.6e6, bus: 5.4e6, shelter: 8.6e6 };
+const EXPECTED = { cow: 5.8e6, farm: 2.3e6, wheat: 9.0e6, grass: 14.5e6, barn: 18.6e6, chapel: 8.7e6, windmill: 2.4e6, birch_mid: 3.2e6, birch_far: 0.9e6, bare: 0.55e6, house: 7.9e6, bale: 0.33e6, bull: 4.82e6, tractor: 6.7e6, harvest: 5.13e6, truck: 4.5e6, trough: 4.6e6, bus: 5.4e6, shelter: 8.6e6, horse: 2.29e6, pig: 1.24e6, duck: 1.53e6 };
 function updateProgress() {
   const total = Object.values(EXPECTED).reduce((a, b) => a + b, 0);
   const done = Object.entries(progress).reduce((a, [k, v]) => a + Math.min(v, EXPECTED[k]), 0);
@@ -249,7 +249,7 @@ function buildSky(tex) {
       void main() {
         vec3 d = normalize(vDir);
         float el = asin(clamp(d.y, -1.0, 1.0));
-        float u = atan(d.x, d.z) / 6.2831853 * 3.0 + uTime * 0.006;
+        float u = atan(d.x, d.z) / 6.2831853 * 3.0 + uTime * 0.004;
         float v = (el + 0.03) / 0.56;
         vec3 c = texture2D(tSky, vec2(u, clamp(v, 0.004, 0.996))).rgb;
         float lum = dot(c, vec3(0.3, 0.59, 0.11));
@@ -1105,7 +1105,7 @@ function updateMarkers(t) {
 function pickTreeSpots() {
   const spots = BIRCHES.map((b) => ({ ...b }));
   let guard = 0;
-  while (spots.length < 40 && guard++ < 6000) {
+  while (spots.length < 30 && guard++ < 6000) {
     const a = rand() * Math.PI * 2, d = 85 + rand() * 300;
     const x = Math.cos(a) * d, z = Math.sin(a) * d;
     if (x > 55 && x < 215 && z > -90 && z < 90) continue;
@@ -1212,7 +1212,7 @@ const BIRCHES = [
   { x: 14, z: -4, s: 6.5, rot: 0.3 }, { x: -50, z: 20, s: 7, rot: 2.1 }, { x: 54, z: 10, s: 6, rot: 4.0 },
   { x: -83, z: 35, s: 7.5, rot: 1.2 }, { x: -124, z: 94, s: 6.8, rot: 5.1 }, { x: 104, z: 108, s: 7.2, rot: 2.8 },
   { x: -72, z: -62, s: 6.6, rot: 0.9 }, { x: 16, z: 64, s: 7, rot: 3.6 },
-  { x: 46, z: -12, s: 7.2, rot: 1.7 }, { x: -50, z: 8, s: 6.2, rot: 4.4 }, { x: 12, z: 36, s: 6.8, rot: 0.6 },
+  { x: 46, z: -12, s: 7.2, rot: 1.7 },
 ];
 const BARE_TREES = [
   { x: -28, z: 28, s: 7.2, rot: 0.4 }, { x: 38, z: -44, s: 6.4, rot: 1.5 }, { x: 6, z: -82, s: 7.6, rot: 2.4 },
@@ -1466,6 +1466,216 @@ function makeBull(gltf) {
   scene.add(group);
   return { group, model, rig, pos: new V3(), yaw: 0, speed: 0, turn: 0, eat: 0, pitch: 0,
     state: 'graze', timer: 3 + rand() * 6, goal: new V2() };
+}
+
+// Horse: same SmartRig family, but the model faces -X, so pitch is about Z and
+// roll about X. -Z is the horse's right side.
+const HORSE_SCALE = 1.58;
+const HORSE_TAIL = ['Bone_009', 'Bone_008', 'Bone_007', 'Bone_006'];
+const HORSE_TINTS = [[1, 1, 1], [0.62, 0.58, 0.56], [1.15, 1.08, 0.98]];
+class HorseRig extends CowRig {
+  constructor(model) {
+    super(model);
+    const leg = (a) => [`Bone_0${a}`, `Bone_0${a - 1}`, `Bone_0${a - 2}`, `Bone_0${a - 3}`];
+    this.legs = [
+      { front: false, d: leg(21), walk: 0.0, trot: 0.0, run: 0.12 },
+      { front: true, d: leg(38), walk: 0.25, trot: 0.5, run: 0.55 },
+      { front: false, d: leg(15), walk: 0.5, trot: 0.5, run: 0.0 },
+      { front: true, d: leg(32), walk: 0.75, trot: 0.0, run: 0.42 },
+    ];
+    this.shake = 0; this.shakeT = 5 + Math.random() * 8;
+    this.bounce = 0;
+    // The neck is too short to reach the grass, so it stretches while grazing.
+    this.neck = ['Bone_025', 'Bone_024', 'Bone_023'].map((n) => ({ bone: this.bones[n], rest: this.bones[n].position.clone() }));
+  }
+  P(name, pitch = 0, yaw = 0, roll = 0) { this.rot(name, roll, yaw, pitch); }
+  // speed in m/s of the scaled horse; the rig works in model units
+  update(dt, t, { speed, eat = 0, turn = 0 }) {
+    const s = Math.abs(speed / HORSE_SCALE);
+    const trot = sstep(1.0, 2.0, s), run = sstep(3.0, 4.6, s);
+    this.phase += (speed / HORSE_SCALE / (1.25 + trot * 1.0 + run * 1.4)) * dt;
+    const move = Math.min(1, s / 0.4);
+    const amp = (0.3 + trot * 0.12 + run * 0.25) * move;
+    const lift = (0.5 + trot * 0.35 + run * 0.3) * move;
+    const cyc = this.phase * Math.PI * 2;
+    for (const L of this.legs) {
+      const off = L.walk + (L.trot - L.walk) * trot;
+      const ph = (this.phase + off + (L.run - off) * run) * Math.PI * 2;
+      const sw = Math.sin(ph) * amp, lf = Math.max(0, -Math.cos(ph)) * lift;
+      const [a, b, c, d] = L.d;
+      if (L.front) {
+        const stance = eat * (L.d[0] === 'Bone_038' ? -0.22 : 0.08);
+        this.P(a, sw * 0.9 + stance);
+        this.P(b, -lf * 0.55);
+        this.P(c, lf * 1.5);
+        this.P(d, lf * 0.5);
+      } else {
+        this.P(a, sw * 0.8 - lf * 0.15);
+        this.P(b, lf * 0.55);
+        this.P(c, -lf * 1.1);
+        this.P(d, lf * 0.45);
+      }
+    }
+    const bob = Math.sin(cyc * 2);
+    this.bounce = (Math.abs(bob) * 0.02 * trot * (1 - run) + (0.5 + 0.5 * Math.sin(cyc + 2.2)) * 0.07 * run) * move;
+    this.P('Bone_000', Math.sin(cyc + 0.8) * 0.07 * run + eat * 0.05, 0, Math.sin(cyc) * 0.025 * move * (1 - run));
+    this.P('Bone_004', Math.sin(cyc) * 0.05 * run, turn * 0.08, 0);
+
+    // Head: glances, walking nod, galloping reach, grazing, an occasional shake
+    this.lookT -= dt;
+    if (this.lookT < 0) { this.lookT = 2 + Math.random() * 4; this.lookTarget = (Math.random() - 0.5) * 0.9 * (1 - move * 0.7); }
+    this.look += (this.lookTarget * (1 - eat) + turn * 0.25 - this.look) * Math.min(1, dt * 2.5);
+    this.shakeT -= dt;
+    if (this.shakeT < 0) { this.shakeT = 6 + Math.random() * 10; if (move < 0.5) this.shake = 1; }
+    this.shake = Math.max(0, this.shake - dt * 1.2);
+    const toss = Math.sin(t * 15) * this.shake * this.shake;
+    const nod = bob * 0.07 * move * (1 - run) + Math.sin(cyc + 1.6) * 0.12 * run;
+    this.chew += dt * 7;
+    const chew = eat * 0.05 * Math.sin(this.chew);
+    this.P('Bone_026', eat * 1.2 + nod * 0.5 + run * 0.35 - this.shake * 0.25, this.look * 0.35);
+    this.P('Bone_025', eat * 0.6 + nod * 0.3, this.look * 0.3, toss * 0.12);
+    this.P('Bone_024', eat * 0.45 + nod * 0.2, this.look * 0.2 + toss * 0.2);
+    this.P('Bone_023', -eat * 1.05 + chew - run * 0.15, this.look * 0.15 + toss * 0.3, toss * 0.25);
+    for (const n of this.neck) n.bone.position.copy(n.rest).multiplyScalar(1 + eat * 0.4);
+
+    // Tail sway, fly swish, lifted at a gallop
+    this.swishT -= dt;
+    if (this.swishT < 0) { this.swishT = 3 + Math.random() * 6; this.swish = 1; }
+    this.swish = Math.max(0, this.swish - dt * 0.9);
+    HORSE_TAIL.forEach((n, i) => {
+      const a = (0.05 + 0.06 * move) * Math.sin(t * 2 - i * 0.6) + this.swish * 0.3 * Math.sin(t * 8 - i * 0.7) * (i / HORSE_TAIL.length + 0.3);
+      this.P(n, i === 0 ? 0.15 * trot + 0.6 * run : 0.06 * run, 0, a);
+    });
+    return bob;
+  }
+}
+
+function makeHorse(gltf, i) {
+  const model = SkeletonUtils.clone(gltf.scene);
+  const tint = HORSE_TINTS[i % HORSE_TINTS.length];
+  model.traverse((o) => {
+    if (!o.isMesh) return;
+    o.castShadow = true; o.receiveShadow = true; o.frustumCulled = false;
+    o.material = o.material.clone(); o.material.metalness = 0;
+    o.material.color.setRGB(...tint);
+  });
+  const rig = new HorseRig(model);
+  const face = new THREE.Group();
+  face.rotation.y = Math.PI / 2;
+  face.add(model);
+  const group = new THREE.Group();
+  group.rotation.order = 'YXZ';
+  group.scale.setScalar(HORSE_SCALE);
+  group.add(face);
+  scene.add(group);
+  return { group, model, rig, horse: true, pos: new V3(), yaw: rand() * 6.28, speed: 0, turn: 0, eat: 0, pitch: 0,
+    state: 'graze', timer: 2 + rand() * 6, goal: new V2(), munch: 0, seed: i * 7.3 };
+}
+
+// Pig and duck: small SmartRig animals that face +Z like the cow, so pitch is about X.
+const PIG_SCALE = 0.42, DUCK_SCALE = 0.24;
+class PigRig extends CowRig {
+  constructor(model) {
+    super(model);
+    this.legs = [
+      { front: false, d: ['Bone_016', 'Bone_015', 'Bone_014'], ph: 0.0 },
+      { front: true, d: ['Bone_046', 'Bone_045', 'Bone_044'], ph: 0.25 },
+      { front: false, d: ['Bone_022', 'Bone_021', 'Bone_020'], ph: 0.5 },
+      { front: true, d: ['Bone_052', 'Bone_051', 'Bone_050'], ph: 0.75 },
+    ];
+    this.bounce = 0;
+  }
+  update(dt, t, { speed, eat = 0 }) {
+    const s = speed / PIG_SCALE;
+    this.phase += (s / 1.7) * dt;
+    const move = Math.min(1, Math.abs(s) / 0.5);
+    for (const L of this.legs) {
+      const ph = (this.phase + L.ph) * Math.PI * 2;
+      const sw = Math.sin(ph) * 0.38 * move, lf = Math.max(0, -Math.cos(ph)) * 0.55 * move;
+      const [a, b, c] = L.d;
+      this.rot(a, sw);
+      if (L.front) { this.rot(b, lf * 0.7); this.rot(c, lf * 0.3); }
+      else { this.rot(b, lf * 0.35); this.rot(c, -lf * 0.7); }
+    }
+    const bob = Math.sin(this.phase * Math.PI * 4);
+    this.bounce = Math.abs(bob) * 0.03 * move;
+    this.rot('Bone_030', 0, 0, Math.sin(this.phase * Math.PI * 2) * 0.04 * move);
+    this.lookT -= dt;
+    if (this.lookT < 0) { this.lookT = 1.5 + Math.random() * 3; this.lookTarget = (Math.random() - 0.5) * 0.7; }
+    this.look += (this.lookTarget - this.look) * Math.min(1, dt * 3);
+    this.chew += dt * 10;
+    const root = eat * (0.7 + 0.1 * Math.sin(this.chew));
+    this.rot('Bone_041', root + bob * 0.04 * move, this.look * 0.5, 0);
+    this.rot('Bone_039', eat * 0.15, this.look * 0.2, 0);
+    const flop = bob * 0.12 * move + Math.sin(t * 1.7) * 0.04;
+    this.rot('Bone_055', flop, 0, flop * 0.5);
+    this.rot('Bone_057', flop, 0, -flop * 0.5);
+    ['Bone_011', 'Bone_010', 'Bone_009', 'Bone_008'].forEach((n, i) => this.rot(n, 0, Math.sin(t * 6 - i * 0.9) * 0.25, 0));
+    return bob;
+  }
+}
+
+class DuckRig extends CowRig {
+  constructor(model) {
+    super(model);
+    this.legs = [
+      { d: ['Bone_012', 'Bone_011', 'Bone_010'], ph: 0.0 },
+      { d: ['Bone_016', 'Bone_015', 'Bone_014'], ph: 0.5 },
+    ];
+    this.bounce = 0;
+    this.peck = 0; this.peckT = 2 + Math.random() * 3;
+    this.wag = 0;
+  }
+  update(dt, t, { speed, eat = 0 }) {
+    const s = speed / DUCK_SCALE;
+    this.phase += (s / 0.75) * dt;
+    const move = Math.min(1, Math.abs(s) / 0.4);
+    for (const L of this.legs) {
+      const ph = (this.phase + L.ph) * Math.PI * 2;
+      const sw = Math.sin(ph) * 0.5 * move, lf = Math.max(0, -Math.cos(ph)) * 0.6 * move;
+      const [a, b, c] = L.d;
+      this.rot(a, sw - lf * 0.3);
+      this.rot(b, lf * 0.6);
+      this.rot(c, -lf * 0.4);
+    }
+    const sway = Math.sin(this.phase * Math.PI * 2);
+    this.bounce = Math.abs(Math.cos(this.phase * Math.PI * 2)) * 0.03 * move;
+    this.rot('Bone_000', 0, sway * 0.08 * move, sway * 0.16 * move);
+    // Pecking at the ground while idle, head bob while walking
+    this.peckT -= dt;
+    if (this.peckT < 0) { this.peckT = 1.2 + Math.random() * 3; if (eat > 0.5) this.peck = 1; }
+    this.peck = Math.max(0, this.peck - dt * 1.6);
+    const dip = Math.sin(this.peck * Math.PI) * eat;
+    const bobble = Math.sin(this.phase * Math.PI * 4) * 0.14 * move;
+    this.rot('Bone_008', dip * 0.9 + bobble, 0, 0);
+    this.rot('Bone_007', dip * 0.6 - bobble * 0.5, 0, 0);
+    this.rot('Bone_005', dip * 0.3, 0, 0);
+    this.lookT -= dt;
+    if (this.lookT < 0) { this.lookT = 0.8 + Math.random() * 2.5; this.lookTarget = (Math.random() - 0.5) * 1.2; }
+    this.look += (this.lookTarget - this.look) * Math.min(1, dt * 6);
+    this.rot('Bone_004', -dip * 0.4, this.look * 0.6, 0);
+    if (Math.random() < dt * 0.25) this.wag = 1;
+    this.wag = Math.max(0, this.wag - dt * 1.5);
+    this.rot('Bone_020', 0, Math.sin(t * 22) * 0.35 * this.wag + sway * 0.1 * move, 0);
+    return sway;
+  }
+}
+
+function makeCritter(gltf, Rig, scale, kind, i) {
+  const model = SkeletonUtils.clone(gltf.scene);
+  model.traverse((o) => {
+    if (!o.isMesh) return;
+    o.castShadow = true; o.receiveShadow = true; o.frustumCulled = false;
+    o.material.metalness = 0;
+  });
+  const rig = new Rig(model);
+  const group = new THREE.Group();
+  group.rotation.order = 'YXZ';
+  group.scale.setScalar(scale);
+  group.add(model);
+  scene.add(group);
+  return { group, model, rig, kind, pos: new V3(), yaw: rand() * 6.28, speed: 0, turn: 0, eat: 0, pitch: 0,
+    state: 'idle', timer: 1 + rand() * 4, goal: new V2(), seed: i * 5.1 };
 }
 
 function makeCow(gltf) {
@@ -2079,20 +2289,136 @@ function updateBull(b, dt, t) {
   b.model.position.y = Math.abs(bob) * 0.015 * Math.min(1, b.speed);
 }
 
+const horses = [];
+const HORSE_SPOTS = [[-10, 38], [0, -36], [42, 6]];
+const HORSE_EAT = 5, HORSE_RUN = 8.5;
+
+function steerHorse(h, tx, tz, pace, dt) {
+  const dx = tx - h.pos.x, dz = tz - h.pos.z;
+  const diff = ((Math.atan2(dx, dz) - h.yaw + Math.PI) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2) - Math.PI;
+  h.turn += (Math.max(-1, Math.min(1, diff * 2)) - h.turn) * Math.min(1, dt * 3);
+  h.yaw += h.turn * (h.state === 'run' ? 1.1 : 0.8) * dt;
+  const target = Math.abs(diff) > 1.1 ? Math.min(pace, h.state === 'run' ? 3 : 0.5) : pace;
+  h.speed += (target - h.speed) * Math.min(1, dt * (target > h.speed ? 1.1 : 2));
+  return Math.hypot(dx, dz);
+}
+
+function bolt(h, awayX, awayZ) {
+  if (h.food && h.food.claimer === h) { h.food.claimer = null; h.food.chewing = false; }
+  h.food = null; h.munch = 0;
+  let best = randomPastureSpot();
+  for (let i = 0; i < 6; i++) {
+    const s = randomPastureSpot();
+    const far = Math.hypot(s.x - h.pos.x, s.y - h.pos.z) > 22;
+    const away = awayX == null || (s.x - h.pos.x) * awayX + (s.y - h.pos.z) * awayZ > 0;
+    if (far && away) { best = s; break; }
+  }
+  h.goal.copy(best);
+  h.state = 'run'; h.timer = 14;
+}
+
+function updateHorse(h, dt, t) {
+  h.timer -= dt;
+  const pd = Math.hypot(player.pos.x - h.pos.x, player.pos.z - h.pos.z);
+  if (h.state !== 'run' && started && pd < 3.6 && Math.abs(player.speed) > 3) bolt(h, h.pos.x - player.pos.x, h.pos.z - player.pos.z);
+
+  const food = h.state === 'run' ? null : foodFor(h);
+  const reach = food ? Math.hypot(food.x - h.pos.x, food.z - h.pos.z) : 99;
+  if (h.state === 'run') {
+    const d = steerHorse(h, h.goal.x, h.goal.y, HORSE_RUN, dt);
+    if (d < 6 || h.timer < 0) { h.state = 'walk'; h.goal = randomPastureSpot(); h.timer = 20; }
+  } else if (food && reach < 2.1) {
+    h.state = 'munch';
+    food.chewing = true;
+    h.speed += (0 - h.speed) * Math.min(1, dt * 4);
+    const diff = ((Math.atan2(food.x - h.pos.x, food.z - h.pos.z) - h.yaw + Math.PI) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2) - Math.PI;
+    h.yaw += diff * Math.min(1, dt * 3);
+    if (h.eat > 0.8) h.munch += dt;
+    if (h.munch >= HORSE_EAT) {
+      food.alive = false; food.vanish = 0.45; food.chewing = false; food.claimer = null;
+      h.food = null; h.munch = 0;
+      h.state = 'graze'; h.timer = 3 + rand() * 5;
+    }
+  } else if (food) {
+    food.chewing = false;
+    h.munch = 0;
+    h.state = 'seek';
+    steerHorse(h, food.x, food.z, reach > 30 ? 3.4 : 1.6, dt);
+  } else if (h.state === 'walk') {
+    const d = steerHorse(h, h.goal.x, h.goal.y, 1.6, dt);
+    if (d < 2.5 || h.timer < 0) { h.state = rand() < 0.7 ? 'graze' : 'idle'; h.timer = 4 + rand() * 10; }
+  } else {
+    h.speed += (0 - h.speed) * Math.min(1, dt * 3);
+    h.turn *= 0.9;
+    if (h.timer < 0) {
+      if (rand() < 0.3) bolt(h);
+      else { h.state = 'walk'; h.goal = randomPastureSpot(); h.timer = 40; }
+    }
+  }
+  h.eat += (((h.state === 'munch' || h.state === 'graze') && h.speed < 0.3 ? 1 : 0) - h.eat) * Math.min(1, dt * 1.6);
+  h.pos.x += Math.sin(h.yaw) * h.speed * dt;
+  h.pos.z += Math.cos(h.yaw) * h.speed * dt;
+  collideCow(h.pos, h.yaw, 1.36);
+  h.rig.update(dt, t + h.seed, { speed: h.speed, eat: h.eat, turn: h.turn });
+  placeCow(h, dt);
+  h.model.position.y = h.rig.bounce;
+}
+
+// Pigs and ducks stay in the small corral; the barn and shed sit in its west corner.
+const critters = [];
+const YARD = { x0: FARM.x - 0.9 * FARM.s, x1: FARM.x + 0.82 * FARM.s, z0: FARM.z - 0.86 * FARM.s, z1: FARM.z + 0.88 * FARM.s };
+const CRITTER = {
+  pig: { pace: 0.75, size: 0.45, rad: 0.55, rest: [3, 8] },
+  duck: { pace: 0.45, size: 0.22, rad: 0.3, rest: [1.5, 5] },
+};
+function yardSpot() {
+  for (;;) {
+    const x = YARD.x0 + rand() * (YARD.x1 - YARD.x0), z = YARD.z0 + rand() * (YARD.z1 - YARD.z0);
+    if ((x - FARM.x) / FARM.s < -0.22 && (z - FARM.z) / FARM.s > -0.05) continue;
+    return new V2(x, z);
+  }
+}
+
+function updateCritter(a, dt, t) {
+  const cfg = CRITTER[a.kind];
+  a.timer -= dt;
+  if (a.state === 'walk') {
+    const dx = a.goal.x - a.pos.x, dz = a.goal.y - a.pos.z, d = Math.hypot(dx, dz);
+    const diff = ((Math.atan2(dx, dz) - a.yaw + Math.PI) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2) - Math.PI;
+    a.yaw += diff * Math.min(1, dt * 2.5);
+    const target = Math.abs(diff) > 1.2 ? cfg.pace * 0.3 : cfg.pace;
+    a.speed += (target - a.speed) * Math.min(1, dt * 3);
+    if (d < 0.6 || a.timer < 0) { a.state = 'idle'; a.timer = cfg.rest[0] + rand() * (cfg.rest[1] - cfg.rest[0]); }
+  } else {
+    a.speed += (0 - a.speed) * Math.min(1, dt * 4);
+    if (a.timer < 0) { a.state = 'walk'; a.goal = yardSpot(); a.timer = 20; }
+  }
+  a.eat += ((a.state === 'idle' && a.speed < 0.15 ? 1 : 0) - a.eat) * Math.min(1, dt * 2);
+  a.pos.x += Math.sin(a.yaw) * a.speed * dt;
+  a.pos.z += Math.cos(a.yaw) * a.speed * dt;
+  collideCow(a.pos, a.yaw, cfg.size);
+  a.pos.x = Math.min(YARD.x1, Math.max(YARD.x0, a.pos.x));
+  a.pos.z = Math.min(YARD.z1, Math.max(YARD.z0, a.pos.z));
+  a.rig.update(dt, t + a.seed, { speed: a.speed, eat: a.eat });
+  placeCow(a, dt);
+  a.model.position.y = a.rig.bounce;
+}
+
 function separateCows() {
-  const all = [player, ...npcs];
+  const all = [player, ...npcs, ...horses, ...critters];
+  const rad = (c) => (c.horse ? 1.47 : c.kind ? CRITTER[c.kind].rad : 0.95);
   for (let i = 0; i < all.length; i++) for (let j = i + 1; j < all.length; j++) {
-    const a = all[i].pos, b = all[j].pos, dx = b.x - a.x, dz = b.z - a.z, d = Math.hypot(dx, dz);
-    if (d < 1.9 && d > 1e-4) { const p = (1.9 - d) / 2; a.x -= dx / d * p; a.z -= dz / d * p; b.x += dx / d * p; b.z += dz / d * p; }
+    const a = all[i].pos, b = all[j].pos, dx = b.x - a.x, dz = b.z - a.z, d = Math.hypot(dx, dz), min = rad(all[i]) + rad(all[j]);
+    if (d < min && d > 1e-4) { const p = (min - d) / 2; a.x -= dx / d * p; a.z -= dz / d * p; b.x += dx / d * p; b.z += dz / d * p; }
   }
   for (const r of remotes.values()) {
     for (const c of all) {
-      const a = c.pos, b = r.pos, dx = b.x - a.x, dz = b.z - a.z, d = Math.hypot(dx, dz);
-      if (d < 1.9 && d > 1e-4) { const p = 1.9 - d; a.x -= dx / d * p; a.z -= dz / d * p; }
+      const a = c.pos, b = r.pos, dx = b.x - a.x, dz = b.z - a.z, d = Math.hypot(dx, dz), min = rad(c) + 0.95;
+      if (d < min && d > 1e-4) { const p = min - d; a.x -= dx / d * p; a.z -= dz / d * p; }
     }
   }
   for (const c of all) {
-    const dx = c.pos.x - bull.pos.x, dz = c.pos.z - bull.pos.z, d = Math.hypot(dx, dz), min = 1.4 * BULL_SCALE;
+    const dx = c.pos.x - bull.pos.x, dz = c.pos.z - bull.pos.z, d = Math.hypot(dx, dz), min = c.horse ? 2.2 : 1.4 * BULL_SCALE;
     if (d < min && d > 1e-4) { c.pos.x += dx / d * (min - d); c.pos.z += dz / d * (min - d); }
   }
 }
@@ -2121,9 +2447,9 @@ let treeSpots = [];
 // ---------------------------------------------------------------------------
 async function init() {
   connectNet();
-  const [cowG, farmG, wheatG, grassG, barnG, chapelG, millG, birchMidG, birchFarG, bareG, houseG, baleG, bullG, tractorG, harvestG, truckG, troughG, busG, shelterG, skyT, grassT, zzzT] = await Promise.all([
+  const [cowG, farmG, wheatG, grassG, barnG, chapelG, millG, birchMidG, birchFarG, bareG, houseG, baleG, bullG, tractorG, harvestG, truckG, troughG, busG, shelterG, horseG, pigG, duckG, skyT, grassT, zzzT] = await Promise.all([
     loadGLB('cow'), loadGLB('farm'), loadGLB('wheat'), loadGLB('grass'),
-    loadGLB('barn'), loadGLB('chapel'), loadGLB('windmill'), loadGLB('birch_mid'), loadGLB('birch_far'), loadGLB('bare'), loadGLB('house'), loadGLB('bale'), loadGLB('bull'), loadGLB('tractor'), loadGLB('harvest'), loadGLB('truck'), loadGLB('trough'), loadGLB('bus'), loadGLB('shelter'),
+    loadGLB('barn'), loadGLB('chapel'), loadGLB('windmill'), loadGLB('birch_mid'), loadGLB('birch_far'), loadGLB('bare'), loadGLB('house'), loadGLB('bale'), loadGLB('bull'), loadGLB('tractor'), loadGLB('harvest'), loadGLB('truck'), loadGLB('trough'), loadGLB('bus'), loadGLB('shelter'), loadGLB('horse'), loadGLB('pig'), loadGLB('duck'),
     loadTex('assets/cielo_loop.jpg'), loadTex('assets/suelo.png'), loadTex('assets/zzz.png'),
   ]);
   loadText.textContent = 'Plantando el trigo…';
@@ -2207,7 +2533,18 @@ async function init() {
 
   bull = makeBull(bullG);
   bull.pos.set(BULL_HOME.x, 0, BULL_HOME.z); bull.yaw = rand() * 6.28;
-  for (const c of [player, ...npcs]) placeCow(c, 1);
+  HORSE_SPOTS.forEach(([x, z], i) => {
+    const h = makeHorse(horseG, i);
+    h.pos.set(x, 0, z);
+    horses.push(h);
+  });
+  for (let i = 0; i < 5; i++) {
+    const a = i < 2 ? makeCritter(pigG, PigRig, PIG_SCALE, 'pig', i) : makeCritter(duckG, DuckRig, DUCK_SCALE, 'duck', i);
+    const s = yardSpot();
+    a.pos.set(s.x, 0, s.y);
+    critters.push(a);
+  }
+  for (const c of [player, ...npcs, ...horses, ...critters]) placeCow(c, 1);
   const look = new V3(player.pos.x, player.pos.y + 1.35, player.pos.z);
   const off = new V3(6.7, 2.05, 5.3);
   const horiz = Math.hypot(off.x, off.z);
@@ -2231,7 +2568,7 @@ async function init() {
     started = true;
     try { initAudio(); } catch (e) { console.warn(e); }
   };
-  window.__game = { player, npcs, bull, tractor, harvest, day, camera, scene, renderer, cam, needs, rain, bus, truck, SHELTERS, net, remotes };
+  window.__game = { player, npcs, horses, critters, bull, tractor, harvest, day, camera, scene, renderer, cam, needs, rain, bus, truck, SHELTERS, net, remotes };
   booted = true;
   applyNetSpawn();
   renderer.setAnimationLoop(frame);
@@ -2250,13 +2587,15 @@ function frame() {
   else { player.rig.update(dt, t, { speed: 0 }); placeCow(player, dt); }
   for (const c of npcs) updateNpc(c, dt, t);
   updateBull(bull, dt, t);
+  for (const h of horses) updateHorse(h, dt, t);
+  for (const a of critters) updateCritter(a, dt, t);
   updateTractor(dt);
   updateTruck(dt);
   updateBus(dt);
   if (started) updateRain(dt);
   updateHarvest(dt, t);
   if (started && !(player.hurt > 0) && (vehicleOverlap(player.pos, truck, 6.0, 1.55) || vehicleOverlap(player.pos, bus, 5.6, 1.7))) runOver();
-  for (const c of [player, ...npcs, bull]) {
+  for (const c of [player, ...npcs, bull, ...horses]) {
     pushFromTractor(c.pos);
     if (c === player && player.hurt > 0) continue;
     pushFromVehicle(c.pos, truck, 6.0, 1.55);
