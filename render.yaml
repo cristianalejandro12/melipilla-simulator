@@ -1,10 +1,11 @@
-# Blueprint de Render. En el dashboard: New > Blueprint y elige este repo.
+# Servicio Node: sirve el juego y el websocket de las vacas.
+# En Render, el servicio tiene que ser Web Service (no Static Site).
 services:
   - type: web
     name: melipilla-simulator
-    runtime: static
-    buildCommand: "true"
-    staticPublishPath: .
+    runtime: node
+    buildCommand: npm install
+    startCommand: node server.js
     envVars:
-      - key: SKIP_INSTALL_DEPS
-        value: "true"
+      - key: NODE_VERSION
+        value: "22"

@@ -18,7 +18,7 @@ const WHEAT_PATCH = { x0: 22, x1: 52, z0: 18, z1: 40 };
 const PATH = { x0: 38, x1: 205, z0: -2.2, z1: 2.2 };
 const ROAD = { x0: -340, x1: 340, z0: -128, z1: -114 };
 const WORLD_RADIUS = 420;
-// Uncompressed Meshy buildings. Each model faces +Z locally; hx/hz are footprint half sizes in meters.
+// Meshy buildings. Each model faces +Z locally; hx/hz are footprint half sizes in meters.
 const BARN = { file: 'barn', x: 32, z: -31, s: 7, yaw: 0, hx: 6.0, hz: 6.7, pad: 0 };
 const CHAPEL = { file: 'chapel', x: -95, z: 72, s: 24, yaw: Math.atan2(95, -72), hx: 10.6, hz: 23, pad: 28 };
 const MILL = { file: 'windmill', x: 122, z: 98, s: 8, yaw: Math.atan2(-22, -98), hx: 3.8, hz: 3.8, pad: 9 };
@@ -197,7 +197,7 @@ const U = {
 const loadBar = document.getElementById('loadBar');
 const loadText = document.getElementById('loadText');
 const progress = {};
-const EXPECTED = { cow: 5.8e6, farm: 2.3e6, wheat: 9.0e6, grass: 29.4e6, barn: 99.1e6, chapel: 45.0e6, windmill: 2.4e6, birch_mid: 3.2e6, birch_far: 0.9e6, bare: 0.55e6, house: 21.6e6, bale: 0.33e6, bull: 4.82e6, tractor: 6.7e6, harvest: 5.13e6, truck: 4.5e6, trough: 4.6e6, bus: 5.4e6, shelter: 25e6 };
+const EXPECTED = { cow: 5.8e6, farm: 2.3e6, wheat: 9.0e6, grass: 14.5e6, barn: 18.6e6, chapel: 8.7e6, windmill: 2.4e6, birch_mid: 3.2e6, birch_far: 0.9e6, bare: 0.55e6, house: 7.9e6, bale: 0.33e6, bull: 4.82e6, tractor: 6.7e6, harvest: 5.13e6, truck: 4.5e6, trough: 4.6e6, bus: 5.4e6, shelter: 8.6e6 };
 function updateProgress() {
   const total = Object.values(EXPECTED).reduce((a, b) => a + b, 0);
   const done = Object.entries(progress).reduce((a, [k, v]) => a + Math.min(v, EXPECTED[k]), 0);
@@ -260,10 +260,12 @@ function buildSky(tex) {
         float sd = max(dot(d, uSunDir), 0.0);
         c += uGlow * (pow(sd, 6.0) * 0.55 + pow(sd, 400.0) * 1.5) * (1.0 - uCloud * 0.8);
         if (uStars > 0.0) {
-          vec3 cell = floor(d * 420.0);
+          vec3 grid = d * 720.0;
+          vec3 cell = floor(grid);
           float h = hash(cell);
-          float tw = 0.6 + 0.4 * sin(uTime * (2.0 + h * 5.0) + h * 60.0);
-          c += vec3(0.9, 0.95, 1.0) * step(0.9965, h) * tw * uStars * (1.0 - uCloud) * smoothstep(0.02, 0.25, d.y);
+          float tw = 0.4 + 0.2 * sin(uTime * (2.0 + h * 5.0) + h * 60.0);
+          float point = smoothstep(0.38, 0.0, length(fract(grid) - 0.5));
+          c += vec3(0.72, 0.8, 1.0) * step(0.9968, h) * point * tw * 0.45 * uStars * (1.0 - uCloud) * smoothstep(0.08, 0.35, d.y);
           c += vec3(0.85, 0.9, 1.0) * smoothstep(0.99955, 0.9997, sd) * uStars;
         }
         c = mix(uHorizon, c, smoothstep(-0.04, 0.2, v));
@@ -799,10 +801,6 @@ function updateHarvest(dt, t) {
     c.tag.sprite.position.set(c.pos.x, c.pos.y + 1.9 - (c.kneel || 0) * 0.7, c.pos.z);
     c.tag.sprite.visible = !(c === player && (needs.drink > 0 || eatBite));
   }
-  if (prompt.sprite && prompt.sprite.visible && player && player.tag) {
-    _side.setFromMatrixColumn(camera.matrixWorld, 0);
-    prompt.sprite.position.copy(player.tag.sprite.position).addScaledVector(_side, 0.46);
-  }
 }
 
 function nearestHarvest() {
@@ -1034,21 +1032,24 @@ const BEDS = [{ x: -6, z: 24 }, { x: 28, z: 14 }, { x: -26, z: -4 }];
 const POND_AT = { x: -38, z: 13 };
 const SLEEP_TIME = 30, DRINK_HOLD = 10;
 const needs = { waterIn: 45, thirsty: false, sleepIn: 70, sleepy: false, drink: 0 };
-let eHeld = false;
-const prompt = { sprite: null, text: '' };
-let aguaMap = null, sleepMap = null;
+let qHeld = false;
+const markers = { arrow: null, zzz: null };
 
-function iconSprite(map, size) {
-  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map, transparent: true, depthWrite: false }));
-  const a = map.image.height / map.image.width;
-  sp.scale.set(size, size * a, 1);
+function canvasSprite(w, h, draw, sx, sy) {
+  const cnv = document.createElement('canvas');
+  cnv.width = w; cnv.height = h;
+  draw(cnv.getContext('2d'));
+  const tex = new THREE.CanvasTexture(cnv);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false }));
+  sp.scale.set(sx, sy, 1);
   sp.center.set(0.5, 0);
   sp.renderOrder = 4;
+  sp.visible = false;
   scene.add(sp);
   return sp;
 }
-const _side = new V3();
-function buildTrough(gltf) {
+function buildTrough(gltf, zzzTex) {
   const model = gltf.scene;
   model.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; o.material.metalness = 0.04; o.material.roughness = 0.72; } });
   const S = 2.6;
@@ -1058,26 +1059,47 @@ function buildTrough(gltf) {
   group.add(model);
   group.position.set(POND_AT.x, terrainH(POND_AT.x, POND_AT.z), POND_AT.z);
   scene.add(group);
-  const agua = iconSprite(aguaMap, 0.55);
-  agua.position.set(POND_AT.x, terrainH(POND_AT.x, POND_AT.z) + 2.1, POND_AT.z);
   circles.push({ x: POND_AT.x, z: POND_AT.z, r: 2.3 });
-  for (const b of BEDS) {
-    const s = iconSprite(sleepMap, 0.55);
-    s.position.set(b.x, terrainH(b.x, b.z) + 1.7, b.z);
-  }
-  prompt.sprite = iconSprite(aguaMap, 0.36);
-  prompt.sprite.visible = false;
+  markers.arrow = canvasSprite(128, 128, (g) => {
+    g.fillStyle = '#ffe14a';
+    g.strokeStyle = '#6d4e08';
+    g.lineWidth = 10;
+    g.lineJoin = 'round';
+    g.beginPath();
+    g.moveTo(64, 116);
+    g.lineTo(14, 16);
+    g.lineTo(114, 16);
+    g.closePath();
+    g.fill();
+    g.stroke();
+  }, 1.7, 1.5);
+  zzzTex.colorSpace = THREE.SRGBColorSpace;
+  const zzz = new THREE.Sprite(new THREE.SpriteMaterial({ map: zzzTex, transparent: true, depthWrite: false }));
+  const za = zzzTex.image.height / zzzTex.image.width;
+  zzz.scale.set(1.15, 1.15 * za, 1);
+  zzz.center.set(0.5, 0);
+  zzz.renderOrder = 4;
+  zzz.visible = false;
+  scene.add(zzz);
+  markers.zzz = zzz;
 }
-function setPrompt(which) {
-  if (prompt.text === which) return;
-  prompt.text = which;
-  if (!prompt.sprite) return;
-  prompt.sprite.visible = false;
-  if (!which) return;
-  const map = which === 'agua' ? aguaMap : sleepMap;
-  prompt.sprite.material.map = map;
-  const a = map.image.height / map.image.width;
-  prompt.sprite.scale.set(0.36, 0.36 * a, 1);
+function updateMarkers(t) {
+  const arrow = markers.arrow, zzz = markers.zzz;
+  if (!arrow || !zzz) return;
+  const thirsty = !!(started && player && needs.thirsty && !(player.asleep > 0) && !(player.hurt > 0));
+  arrow.visible = thirsty;
+  if (thirsty) {
+    const hop = Math.abs(Math.sin(t * 3.2));
+    arrow.position.set(POND_AT.x, terrainH(POND_AT.x, POND_AT.z) + 2.15 + hop * 0.85, POND_AT.z);
+    const s = 1 + hop * 0.12;
+    arrow.scale.set(1.7 * s, 1.5 * s, 1);
+  }
+  const sleeping = !!(player && player.asleep > 0 && !(player.hurt > 0));
+  zzz.visible = sleeping;
+  if (sleeping) {
+    const bob = Math.sin(t * 2.2) * 0.05;
+    zzz.position.set(player.pos.x, player.pos.y + 3.5 - (player.kneel || 0) * 0.55 + bob, player.pos.z);
+  }
 }
 
 function pickTreeSpots() {
@@ -1553,6 +1575,8 @@ canvas.addEventListener('wheel', (e) => { e.preventDefault(); cam.dist = Math.mi
 let player = null, bull = null;
 const npcs = [];
 let started = false;
+let booted = false;
+let cowGltf = null;
 let eaten = 0, eatTimer = 0, eatBite = null;
 const EAT_HOLD = 1.7;
 let mooT = 0;
@@ -1561,6 +1585,194 @@ function moo() {
   if (!player || mooT > 0) return;
   mooT = 1.8;
   playMoo(0.2, 1);
+}
+
+// ---------------------------------------------------------------------------
+// Other players: each connection is a cow, spawned apart, synced over websocket
+// ---------------------------------------------------------------------------
+const REMOTE_TINTS = [
+  [1, 0.97, 0.9],
+  [0.9, 0.95, 1],
+  [1, 0.92, 0.9],
+  [0.93, 1, 0.9],
+  [0.98, 0.94, 0.84],
+  [0.9, 0.98, 0.96],
+];
+const net = { ws: null, id: null, spawn: null, placed: false, acc: 0, tries: 0, status: 'off' };
+const remotes = new Map();
+const queued = new Map();
+window.__net = net;
+window.__remotes = remotes;
+
+function wsUrl() {
+  if (location.protocol === 'file:') return null;
+  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  return `${proto}//${location.host}/ws`;
+}
+function setOnline(text) {
+  const el = document.getElementById('online');
+  if (el) el.textContent = text;
+}
+function refreshOnline() {
+  const n = 1 + remotes.size + queued.size;
+  if (net.status === 'wait') setOnline('Conectando…');
+  else if (net.status !== 'on') setOnline('Sin conexión');
+  else setOnline(n <= 1 ? 'En línea · solo tú' : `En línea · ${n} vacas`);
+}
+function connectNet() {
+  const url = wsUrl();
+  if (!url) { net.status = 'off'; refreshOnline(); return; }
+  net.status = 'wait';
+  refreshOnline();
+  let ws;
+  try { ws = new WebSocket(url); } catch { scheduleReconnect(); return; }
+  net.ws = ws;
+  ws.onopen = () => { net.status = 'on'; net.tries = 0; refreshOnline(); };
+  ws.onmessage = (ev) => {
+    let msg;
+    try { msg = JSON.parse(ev.data); } catch { return; }
+    if (!msg || typeof msg !== 'object') return;
+    if (msg.t === 'w') onWelcome(msg);
+    else if (msg.t === 's') onRemoteState(msg);
+    else if (msg.t === 'l') removeRemote(msg.id);
+  };
+  ws.onclose = () => {
+    if (net.ws === ws) net.ws = null;
+    net.status = 'off';
+    refreshOnline();
+    scheduleReconnect();
+  };
+  ws.onerror = () => { try { ws.close(); } catch (err) {} };
+}
+function scheduleReconnect() {
+  net.tries += 1;
+  const wait = Math.min(8000, 1000 * net.tries);
+  setTimeout(() => {
+    if (!net.ws || net.ws.readyState === WebSocket.CLOSING || net.ws.readyState === WebSocket.CLOSED) connectNet();
+  }, wait);
+}
+function onWelcome(msg) {
+  net.id = msg.id;
+  net.spawn = { x: Number(msg.x), z: Number(msg.z), yaw: Number(msg.y) };
+  for (const id of [...remotes.keys()]) removeRemote(id);
+  queued.clear();
+  applyNetSpawn();
+  for (const p of (Array.isArray(msg.peers) ? msg.peers : [])) onRemoteState(p);
+  refreshOnline();
+}
+function onRemoteState(p) {
+  if (!p || p.id == null || p.id === net.id) return;
+  const x = Number(p.x), z = Number(p.z), yaw = Number(p.y);
+  if (!Number.isFinite(x) || !Number.isFinite(z) || !Number.isFinite(yaw)) return;
+  const state = {
+    id: p.id, x, z, yaw,
+    speed: Number(p.v) || 0,
+    eat: Number(p.e) || 0,
+    moo: Number(p.m) || 0,
+    kneel: Number(p.k) || 0,
+    got: p.g | 0,
+  };
+  if (!cowGltf) { queued.set(p.id, state); refreshOnline(); return; }
+  let cow = remotes.get(p.id);
+  if (!cow) {
+    cow = spawnRemote(state);
+    remotes.set(p.id, cow);
+    refreshOnline();
+    return;
+  }
+  const prevMoo = cow.net.moo;
+  cow.net = state;
+  if (prevMoo < 0.45 && state.moo > 0.55 && player && actx) {
+    const d = Math.hypot(state.x - player.pos.x, state.z - player.pos.z);
+    playMoo(Math.max(0, 1 - d / 55) * 0.22, 0.95 + (Math.abs(state.id | 0) % 5) * 0.02);
+  }
+}
+function spawnRemote(state) {
+  const cow = makeCow(cowGltf);
+  cow.net = state;
+  cow.pos.set(state.x, 0, state.z);
+  cow.yaw = state.yaw;
+  cow.got = state.got;
+  cow.tag = makeTag();
+  drawTag(cow.tag, state.got);
+  const tint = REMOTE_TINTS[Math.abs(state.id | 0) % REMOTE_TINTS.length];
+  cow.model.traverse((o) => { if (o.isMesh) o.material.color.setRGB(tint[0], tint[1], tint[2]); });
+  placeCow(cow, 1);
+  return cow;
+}
+function removeRemote(id) {
+  queued.delete(id);
+  const cow = remotes.get(id);
+  if (!cow) { refreshOnline(); return; }
+  remotes.delete(id);
+  scene.remove(cow.group);
+  cow.model.traverse((o) => { if (o.isMesh && o.material) o.material.dispose(); });
+  if (cow.tag) {
+    scene.remove(cow.tag.sprite);
+    cow.tag.tex.dispose();
+    cow.tag.sprite.material.dispose();
+  }
+  refreshOnline();
+}
+function flushRemotes() {
+  if (!cowGltf) return;
+  for (const state of queued.values()) {
+    if (!remotes.has(state.id)) remotes.set(state.id, spawnRemote(state));
+  }
+  queued.clear();
+  refreshOnline();
+}
+function applyNetSpawn() {
+  if (!player || !net.spawn || net.placed) return;
+  const moved = started && Math.hypot(player.pos.x - 2, player.pos.z - 8) > 1.5;
+  net.placed = true;
+  if (moved) return;
+  player.pos.set(net.spawn.x, 0, net.spawn.z);
+  player.yaw = net.spawn.yaw;
+  placeCow(player, 1);
+  if (booted && !started) {
+    const look = new V3(player.pos.x, terrainH(player.pos.x, player.pos.z) + 1.35, player.pos.z);
+    const off = camera.position.clone().sub(cam.target);
+    cam.target.copy(look);
+    camera.position.copy(look).add(off);
+    camera.lookAt(look);
+  }
+}
+function sendState() {
+  if (!player || !net.ws || net.ws.readyState !== 1) return;
+  net.ws.send(JSON.stringify({
+    t: 's',
+    x: +player.pos.x.toFixed(2),
+    z: +player.pos.z.toFixed(2),
+    y: +player.yaw.toFixed(3),
+    v: +player.speed.toFixed(2),
+    e: +Math.min(1, player.eat).toFixed(2),
+    m: +Math.min(1, player.moo).toFixed(2),
+    k: +Math.min(1, player.kneel || 0).toFixed(2),
+    g: eaten | 0,
+  }));
+}
+function updateRemotes(dt, t) {
+  const k = 1 - Math.exp(-dt * 12);
+  for (const cow of remotes.values()) {
+    const n = cow.net;
+    if (Math.hypot(n.x - cow.pos.x, n.z - cow.pos.z) > 12) {
+      cow.pos.x = n.x; cow.pos.z = n.z; cow.yaw = n.yaw;
+    } else {
+      cow.pos.x += (n.x - cow.pos.x) * k;
+      cow.pos.z += (n.z - cow.pos.z) * k;
+      cow.yaw = lerpAngle(cow.yaw, n.yaw, k);
+    }
+    cow.speed += (n.speed - cow.speed) * k;
+    cow.eat += (n.eat - cow.eat) * Math.min(1, dt * 6);
+    cow.moo += (n.moo - cow.moo) * Math.min(1, dt * 8);
+    cow.kneel = (cow.kneel || 0) + (n.kneel - (cow.kneel || 0)) * Math.min(1, dt * 4);
+    if ((cow.got | 0) !== (n.got | 0)) { cow.got = n.got | 0; drawTag(cow.tag, cow.got); }
+    const bob = cow.rig.update(dt, t + (Math.abs(n.id | 0) % 7), { speed: cow.speed, eat: cow.eat, moo: cow.moo, turn: 0, kneel: cow.kneel || 0 });
+    placeCow(cow, dt);
+    cow.model.position.y = Math.abs(bob) * 0.015 * Math.min(1, Math.abs(cow.speed));
+    cow.tag.sprite.position.set(cow.pos.x, cow.pos.y + 1.9 - (cow.kneel || 0) * 0.7, cow.pos.z);
+  }
 }
 
 function zoneName(x, z) {
@@ -1575,7 +1787,6 @@ function zoneName(x, z) {
   return 'Campo abierto';
 }
 
-function nearBed() { return BEDS.some((b) => Math.hypot(b.x - player.pos.x, b.z - player.pos.z) < 3.2); }
 function nearPond() { return Math.hypot(POND_AT.x - player.pos.x, POND_AT.z - player.pos.z) < 4.6; }
 function easeKneel(cow, dt) {
   const want = cow.asleep > 0 ? 1 : 0;
@@ -1598,8 +1809,9 @@ function respawn() {
   eaten = 0;
   player.got = 0;
   if (player.tag) drawTag(player.tag, 0);
-  player.pos.set(2, 0, 8);
-  player.yaw = Math.atan2(FARM.x - 2, FARM.z - 8) + 0.5;
+  const home = net.spawn || { x: 2, z: 8, yaw: Math.atan2(FARM.x - 2, FARM.z - 8) + 0.5 };
+  player.pos.set(home.x, 0, home.z);
+  player.yaw = home.yaw;
   player.speed = 0;
   player.turn = 0;
   player.asleep = 0;
@@ -1620,8 +1832,9 @@ function blockFullShelter() {
 }
 
 function updatePlayer(dt, t) {
-  const eNow = !!keys.KeyE, eTap = eNow && !eHeld;
-  eHeld = eNow;
+  const eNow = !!keys.KeyE;
+  const qNow = !!keys.KeyQ, qTap = qNow && !qHeld;
+  qHeld = qNow;
   if (player.hurt > 0) {
     player.hurt -= dt;
     player.speed = 0;
@@ -1629,8 +1842,14 @@ function updatePlayer(dt, t) {
     player.rig.update(dt, t, { speed: 0, eat: 0, moo: 0, turn: 0, kneel: player.kneel || 0 });
     placeCow(player, dt);
     if (player.hurt <= 0) respawn();
-    setPrompt('');
     return;
+  }
+  if (qTap && needs.sleepy) {
+    player.asleep = SLEEP_TIME;
+    needs.sleepy = false;
+    player.speed = 0;
+    eatTimer = 0;
+    eatBite = null;
   }
   if (player.asleep > 0) {
     player.asleep -= dt;
@@ -1639,7 +1858,6 @@ function updatePlayer(dt, t) {
     player.rig.update(dt, t, { speed: 0, eat: 0, moo: player.moo, turn: 0, kneel: player.kneel || 0 });
     placeCow(player, dt);
     if (player.asleep <= 0) { player.asleep = 0; needs.sleepIn = 80 + rand() * 40; needs.sleepy = false; }
-    setPrompt('');
     showNeeds();
     return;
   }
@@ -1687,15 +1905,13 @@ function updatePlayer(dt, t) {
     needs.drink += dt;
     if (needs.drink >= DRINK_HOLD) { needs.drink = 0; needs.thirsty = false; needs.waterIn = 70 + rand() * 35; }
   } else needs.drink = 0;
-  if (eTap && day.name === 'Noche' && needs.sleepy && nearBed() && !bite) { player.asleep = SLEEP_TIME; needs.sleepy = false; }
   blockFullShelter();
-  setPrompt(needs.thirsty ? 'agua' : needs.sleepy ? 'dormir' : '');
   showNeeds();
 }
 const needAguaEl = document.getElementById('needAgua'), needDormirEl = document.getElementById('needDormir');
 function showNeeds() {
   needAguaEl.classList.toggle('on', needs.thirsty);
-  needDormirEl.classList.toggle('on', needs.sleepy || (player && player.asleep > 0));
+  needDormirEl.classList.toggle('on', needs.sleepy);
 }
 
 function randomPastureSpot() {
@@ -1869,6 +2085,12 @@ function separateCows() {
     const a = all[i].pos, b = all[j].pos, dx = b.x - a.x, dz = b.z - a.z, d = Math.hypot(dx, dz);
     if (d < 1.9 && d > 1e-4) { const p = (1.9 - d) / 2; a.x -= dx / d * p; a.z -= dz / d * p; b.x += dx / d * p; b.z += dz / d * p; }
   }
+  for (const r of remotes.values()) {
+    for (const c of all) {
+      const a = c.pos, b = r.pos, dx = b.x - a.x, dz = b.z - a.z, d = Math.hypot(dx, dz);
+      if (d < 1.9 && d > 1e-4) { const p = 1.9 - d; a.x -= dx / d * p; a.z -= dz / d * p; }
+    }
+  }
   for (const c of all) {
     const dx = c.pos.x - bull.pos.x, dz = c.pos.z - bull.pos.z, d = Math.hypot(dx, dz), min = 1.4 * BULL_SCALE;
     if (d < min && d > 1e-4) { c.pos.x += dx / d * (min - d); c.pos.z += dz / d * (min - d); }
@@ -1898,13 +2120,12 @@ let treeSpots = [];
 // Boot
 // ---------------------------------------------------------------------------
 async function init() {
-  const [cowG, farmG, wheatG, grassG, barnG, chapelG, millG, birchMidG, birchFarG, bareG, houseG, baleG, bullG, tractorG, harvestG, truckG, troughG, busG, shelterG, skyT, grassT, aguaT, sleepT] = await Promise.all([
+  connectNet();
+  const [cowG, farmG, wheatG, grassG, barnG, chapelG, millG, birchMidG, birchFarG, bareG, houseG, baleG, bullG, tractorG, harvestG, truckG, troughG, busG, shelterG, skyT, grassT, zzzT] = await Promise.all([
     loadGLB('cow'), loadGLB('farm'), loadGLB('wheat'), loadGLB('grass'),
     loadGLB('barn'), loadGLB('chapel'), loadGLB('windmill'), loadGLB('birch_mid'), loadGLB('birch_far'), loadGLB('bare'), loadGLB('house'), loadGLB('bale'), loadGLB('bull'), loadGLB('tractor'), loadGLB('harvest'), loadGLB('truck'), loadGLB('trough'), loadGLB('bus'), loadGLB('shelter'),
-    loadTex('assets/cielo_loop.jpg'), loadTex('assets/suelo.png'), loadTex('assets/icon-agua.png'), loadTex('assets/icon-dormir.png'),
+    loadTex('assets/cielo_loop.jpg'), loadTex('assets/suelo.png'), loadTex('assets/zzz.png'),
   ]);
-  aguaT.colorSpace = sleepT.colorSpace = THREE.SRGBColorSpace;
-  aguaMap = aguaT; sleepMap = sleepT;
   loadText.textContent = 'Plantando el trigo…';
   await new Promise((r) => setTimeout(r, 30));
 
@@ -1917,7 +2138,7 @@ async function init() {
   buildTruck(truckG);
   buildBus(busG);
   buildShelters(shelterG);
-  buildTrough(troughG);
+  buildTrough(troughG, zzzT);
   buildRain();
   buildHarvest(harvestG);
   buildFarm(farmG);
@@ -1963,9 +2184,16 @@ async function init() {
   buildCardField(grassImp, tufts, { ground: grassT });
 
   // Cows
+  cowGltf = cowG;
   player = makeCow(cowG);
-  player.pos.set(2, 0, 8);
-  player.yaw = Math.atan2(FARM.x - 2, FARM.z - 8) + 0.5;
+  if (net.spawn) {
+    player.pos.set(net.spawn.x, 0, net.spawn.z);
+    player.yaw = net.spawn.yaw;
+    net.placed = true;
+  } else {
+    player.pos.set(2, 0, 8);
+    player.yaw = Math.atan2(FARM.x - 2, FARM.z - 8) + 0.5;
+  }
   const npcSpots = [[-8, -8], [18, -20], [28, 14]];
   npcSpots.forEach(([x, z], i) => {
     const c = makeCow(cowG);
@@ -1975,13 +2203,13 @@ async function init() {
     npcs.push(c);
   });
   for (const c of [player, ...npcs]) { c.got = 0; c.tag = makeTag(); drawTag(c.tag, 0); }
+  flushRemotes();
 
   bull = makeBull(bullG);
   bull.pos.set(BULL_HOME.x, 0, BULL_HOME.z); bull.yaw = rand() * 6.28;
   for (const c of [player, ...npcs]) placeCow(c, 1);
-  const home = new V3(8.7, 3.4, 13.3);
   const look = new V3(player.pos.x, player.pos.y + 1.35, player.pos.z);
-  const off = home.clone().sub(look);
+  const off = new V3(6.7, 2.05, 5.3);
   const horiz = Math.hypot(off.x, off.z);
   cam.dist = off.length();
   cam.pitch = Math.atan2(off.y, horiz);
@@ -2003,7 +2231,9 @@ async function init() {
     started = true;
     try { initAudio(); } catch (e) { console.warn(e); }
   };
-  window.__game = { player, npcs, bull, tractor, harvest, day, camera, scene, renderer, cam, needs, rain, bus, truck, SHELTERS };
+  window.__game = { player, npcs, bull, tractor, harvest, day, camera, scene, renderer, cam, needs, rain, bus, truck, SHELTERS, net, remotes };
+  booted = true;
+  applyNetSpawn();
   renderer.setAnimationLoop(frame);
 }
 
@@ -2032,7 +2262,13 @@ function frame() {
     pushFromVehicle(c.pos, truck, 6.0, 1.55);
     pushFromVehicle(c.pos, bus, 5.6, 1.7);
   }
+  updateMarkers(t);
+  updateRemotes(dt, t);
   separateCows();
+  if (player) {
+    net.acc += dt;
+    if (net.acc >= 1 / 15) { net.acc = 0; sendState(); }
+  }
   updateCamera(dt, t);
   U.uCow.value.copy(player.pos);
   U.uCenter.value.set(player.pos.x, player.pos.z);
