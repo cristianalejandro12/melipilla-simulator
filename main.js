@@ -249,7 +249,7 @@ function buildSky(tex) {
       void main() {
         vec3 d = normalize(vDir);
         float el = asin(clamp(d.y, -1.0, 1.0));
-        float u = atan(d.x, d.z) / 6.2831853 * 3.0;
+        float u = atan(d.x, d.z) / 6.2831853 * 3.0 + uTime * 0.006;
         float v = (el + 0.03) / 0.56;
         vec3 c = texture2D(tSky, vec2(u, clamp(v, 0.004, 0.996))).rgb;
         float lum = dot(c, vec3(0.3, 0.59, 0.11));
