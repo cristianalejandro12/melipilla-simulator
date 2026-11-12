@@ -1560,7 +1560,7 @@ const clock = new THREE.Clock();
 function moo() {
   if (!player || mooT > 0) return;
   mooT = 1.8;
-  playMoo(0.55, 1);
+  playMoo(0.2, 1);
 }
 
 function zoneName(x, z) {
