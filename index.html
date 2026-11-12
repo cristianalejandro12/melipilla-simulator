@@ -28,6 +28,10 @@
   #needs img { height: 64px; display: none; animation: pulse 0.9s ease-in-out infinite; filter: drop-shadow(0 3px 4px rgba(0,0,0,.35)); }
   #needs img.on { display: block; }
   @keyframes pulse { 0%, 100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.18); opacity: .55; } }
+  #soloPc { display: none; position: fixed; inset: 0; z-index: 30; align-items: center; justify-content: center; padding: 24px;
+    background: radial-gradient(ellipse at center, rgba(20,60,110,.55), rgba(8,22,44,.94)); }
+  #soloPc.on { display: flex; }
+  #soloPc p { margin: 0; font-size: clamp(40px, 11vw, 76px); font-weight: 700; text-align: center; letter-spacing: -0.5px; }
 </style>
 <script type="importmap">
 { "imports": {
@@ -50,6 +54,23 @@
   <button id="play">Iniciar</button>
 </div>
 
-<script type="module" src="main.js"></script>
+<div id="soloPc"><p>Solo para PC</p></div>
+<script>
+  (function () {
+    var ua = navigator.userAgent || '';
+    var phone = /iPhone|iPod|Windows Phone|IEMobile|Opera Mini|BlackBerry/i.test(ua)
+      || (/Android/i.test(ua) && /Mobile/i.test(ua))
+      || !!(navigator.userAgentData && navigator.userAgentData.mobile);
+    if (!phone) {
+      var s = document.createElement('script');
+      s.type = 'module';
+      s.src = 'main.js';
+      document.body.appendChild(s);
+      return;
+    }
+    document.getElementById('soloPc').classList.add('on');
+    document.getElementById('intro').style.display = 'none';
+  })();
+</script>
 </body>
 </html>
