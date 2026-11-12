@@ -1378,7 +1378,7 @@ class CowRig {
 
 // Bull: same Meshy SmartRig family, different bone numbering. Faces +Z, left is +X.
 const BULL_TAIL = ['Bone_010', 'Bone_009', 'Bone_008', 'Bone_007', 'Bone_006', 'Bone_005', 'Bone_004', 'Bone_003', 'Bone_002'];
-const BULL_SCALE = 1.45;
+const BULL_SCALE = 1.2;
 class BullRig extends CowRig {
   constructor(model) {
     super(model);
