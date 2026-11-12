@@ -1486,8 +1486,8 @@ function initAudio() {
   for (let i = 0; i < len; i++) { last = last * 0.98 + (Math.random() * 2 - 1) * 0.02; d[i] = last * 6; }
   const noise = actx.createBufferSource(); noise.buffer = buf; noise.loop = true;
   const lp = actx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 500;
-  const wg = actx.createGain(); wg.gain.value = 0.05;
-  const lfo = actx.createOscillator(); lfo.frequency.value = 0.13; const lfoG = actx.createGain(); lfoG.gain.value = 0.03;
+  const wg = actx.createGain(); wg.gain.value = 0.032;
+  const lfo = actx.createOscillator(); lfo.frequency.value = 0.13; const lfoG = actx.createGain(); lfoG.gain.value = 0.018;
   lfo.connect(lfoG).connect(wg.gain); lfo.start();
   noise.connect(lp).connect(wg).connect(master); noise.start();
   const bird = () => {
@@ -1497,7 +1497,7 @@ function initAudio() {
     for (let i = 0; i < n; i++) {
       const s = t + i * 0.14;
       o.frequency.setValueAtTime(base, s); o.frequency.exponentialRampToValueAtTime(base * 1.35, s + 0.05); o.frequency.exponentialRampToValueAtTime(base * 0.9, s + 0.1);
-      g.gain.setValueAtTime(0, s); g.gain.linearRampToValueAtTime(0.025, s + 0.02); g.gain.linearRampToValueAtTime(0, s + 0.1);
+      g.gain.setValueAtTime(0, s); g.gain.linearRampToValueAtTime(0.015, s + 0.02); g.gain.linearRampToValueAtTime(0, s + 0.1);
     }
     o.start(t); o.stop(t + n * 0.14 + 0.1);
     setTimeout(bird, 2500 + Math.random() * 7000);
