@@ -1,0 +1,10 @@
+# Blueprint de Render. En el dashboard: New > Blueprint y elige este repo.
+services:
+  - type: web
+    name: melipilla-simulator
+    runtime: static
+    buildCommand: "true"
+    staticPublishPath: .
+    envVars:
+      - key: SKIP_INSTALL_DEPS
+        value: "true"
