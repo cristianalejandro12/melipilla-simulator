@@ -83,7 +83,7 @@ function pickSpawn() {
 }
 
 function snapshot(p) {
-  return { id: p.id, x: p.x, z: p.z, y: p.yaw, v: p.speed, e: p.eat, m: p.moo, k: p.kneel, g: p.got };
+  return { id: p.id, x: p.x, z: p.z, y: p.yaw, v: p.speed, e: p.eat, m: p.moo, k: p.kneel, g: p.got, a: p.animal || 'v' };
 }
 
 function broadcast(except, obj) {
@@ -138,6 +138,7 @@ wss.on('connection', (ws) => {
     moo: 0,
     kneel: 0,
     got: 0,
+    animal: 'v',
   };
   players.set(ws, player);
   const peers = [];
@@ -162,6 +163,7 @@ wss.on('connection', (ws) => {
     p.moo = clamp(msg.m, 0, 1, 0);
     p.kneel = clamp(msg.k, 0, 1, 0);
     p.got = Math.round(clamp(msg.g, 0, 9999, 0));
+    p.animal = ['h', 'p', 'g', 'd'].includes(msg.a) ? msg.a : 'v';
     broadcast(ws, { t: 's', ...snapshot(p) });
   });
 

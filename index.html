@@ -20,9 +20,13 @@
   .bar { width: min(420px, 70vw); height: 16px; border-radius: 10px; background: rgba(255,255,255,.2); overflow: hidden; border: 2px solid rgba(255,255,255,.6); }
   .bar > div { height: 100%; width: 0; background: linear-gradient(90deg, #ffe27a, #8fd14f); transition: width .2s; }
   #loadText { font-size: 15px; opacity: .9; }
-  button#play { font: inherit; font-size: 26px; padding: 14px 46px; border-radius: 40px; border: 0; cursor: pointer; color: #2b4f1a;
-    background: linear-gradient(#fff6c9, #ffd95a); box-shadow: 0 6px 0 #b8891c, 0 10px 30px rgba(0,0,0,.35); display: none; }
-  button#play:active { transform: translateY(4px); box-shadow: 0 2px 0 #b8891c; }
+  button#play { display: none; }
+  #pick { display: none; flex-direction: column; align-items: center; gap: 14px; }
+  #pick p { margin: 0; font-size: 20px; font-weight: 600; }
+  #pick .row { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
+  #pick button { font: inherit; font-size: 22px; font-weight: 700; padding: 14px 28px; border-radius: 40px; border: 0; cursor: pointer; color: #2b4f1a;
+    background: linear-gradient(#fff6c9, #ffd95a); box-shadow: 0 6px 0 #b8891c, 0 10px 30px rgba(0,0,0,.35); }
+  #pick button:active { transform: translateY(4px); box-shadow: 0 2px 0 #b8891c; }
   #hud { position: fixed; inset: 0; pointer-events: none; z-index: 5; display: none; }
   #needs { position: absolute; left: 16px; top: 14px; display: flex; gap: 12px; }
   #needs img { height: 64px; display: none; animation: pulse 0.9s ease-in-out infinite; filter: drop-shadow(0 3px 4px rgba(0,0,0,.35)); }
@@ -30,6 +34,11 @@
   #online { position: absolute; right: 16px; top: 14px; font-size: 14px; font-weight: 600;
     background: rgba(16, 36, 18, .5); border: 2px solid rgba(255,255,255,.5); border-radius: 999px;
     padding: 7px 14px; letter-spacing: .2px; }
+  #race { position: fixed; inset: 0; z-index: 6; display: none; align-items: center; justify-content: center; pointer-events: none; }
+  #race.on { display: flex; }
+  #raceCount { font-size: clamp(96px, 18vw, 168px); font-weight: 700; color: #ffe27a; text-shadow: 0 8px 0 rgba(0,0,0,.35); line-height: 1; }
+  #raceMsg { position: absolute; top: 16%; left: 0; right: 0; text-align: center; font-size: clamp(28px, 4vw, 46px); font-weight: 700;
+    text-shadow: 0 4px 0 rgba(0,0,0,.4); }
   @keyframes pulse { 0%, 100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.18); opacity: .55; } }
   #soloPc { display: none; position: fixed; inset: 0; z-index: 30; align-items: center; justify-content: center; padding: 24px;
     background: radial-gradient(ellipse at center, rgba(20,60,110,.55), rgba(8,22,44,.94)); }
@@ -50,12 +59,21 @@
   <div id="needs"><img id="needAgua" src="assets/icon-agua.png" alt=""><img id="needDormir" src="assets/icon-dormir.png" alt=""></div>
   <div id="online">Conectando…</div>
 </div>
+<div id="race"><div id="raceCount"></div><div id="raceMsg"></div></div>
 
 <div class="overlay" id="intro">
   <h1>Melipilla <span>simulator</span></h1>
   <div class="bar"><div id="loadBar"></div></div>
   <div id="loadText">Cargando el campo…</div>
-  <button id="play">Iniciar</button>
+  <div id="pick">
+    <p>Elige quién vas a ser</p>
+    <div class="row">
+      <button type="button" data-role="cow">Vaca</button>
+      <button type="button" data-role="horse">Caballo</button>
+      <button type="button" data-role="pig">Cerdo</button>
+      <button type="button" data-role="duck">Pato</button>
+    </div>
+  </div>
 </div>
 
 <div id="soloPc"><p>Solo para PC</p></div>
