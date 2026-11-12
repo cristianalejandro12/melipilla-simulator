@@ -15,6 +15,14 @@ const FARM = { x: -32, z: -24, s: 9, groundY: -0.359 };
 const FARM_RECT = { x0: FARM.x - 9.3, x1: FARM.x + 8.7, z0: FARM.z - 8.6, z1: FARM.z + 8.7 };
 const WHEAT_FIELD = { x0: 66, x1: 200, z0: -75, z1: 75 };
 const WHEAT_PATCH = { x0: 22, x1: 52, z0: 18, z1: 40 };
+const WHEAT_PLOTS = [
+  WHEAT_FIELD,
+  WHEAT_PATCH,
+  { x0: -46, x1: -12, z0: 6, z1: 32 },
+  { x0: -230, x1: -160, z0: -20, z1: 35 },
+  { x0: -30, x1: 70, z0: -230, z1: -190 },
+  { x0: 230, x1: 310, z0: 30, z1: 80 },
+];
 const PATH = { x0: 38, x1: 205, z0: -2.2, z1: 2.2 };
 // Ring road around the valley. Vehicles follow the centerline; asphalt is `half` meters either side.
 const RING = { x0: -360, x1: 360, z0: -150, z1: 160, half: 9, turn: 26 };
@@ -137,7 +145,7 @@ const roadMask = (x, z) => {
   for (const c of CORNERS) m = Math.max(m, cornerCover(x, z, c, RING_IN - 1.15, RING_IN + 1.15, RING_OUT - 1.15, RING_OUT + 1.15));
   return m;
 };
-const wheatMask = (x, z) => Math.max(rectMask(x, z, WHEAT_FIELD, 2), rectMask(x, z, WHEAT_PATCH, 1.5)) * (1 - pathMask(x, z));
+const wheatMask = (x, z) => WHEAT_PLOTS.reduce((m, r) => Math.max(m, rectMask(x, z, r, 2)), 0) * (1 - pathMask(x, z));
 const farmMask = (x, z) => rectMask(x, z, FARM_RECT, 1.5);
 
 const f = (n) => Number(n).toFixed(3);
@@ -193,7 +201,11 @@ float roadMask(vec2 p) {
   ${CORNERS.map((c) => `m = max(m, cornerCover(p, vec2(${f(c.x)}, ${f(c.z)}), vec2(${c.sx.toFixed(1)}, ${c.sz.toFixed(1)}), ${f(RING_IN - 1.15)}, ${f(RING_IN + 1.15)}, ${f(RING_OUT - 1.15)}, ${f(RING_OUT + 1.15)}));`).join('\n  ')}
   return m;
 }
-float wheatMask(vec2 p) { return max(rectMask(p, ${rv(WHEAT_FIELD)}, 2.0), rectMask(p, ${rv(WHEAT_PATCH)}, 1.5)) * (1.0 - pathMask(p)); }
+float wheatMask(vec2 p) {
+  float m = 0.0;
+  ${WHEAT_PLOTS.map((r) => `m = max(m, rectMask(p, ${rv(r)}, 2.0));`).join('\n  ')}
+  return m * (1.0 - pathMask(p));
+}
 float farmMask(vec2 p) { return rectMask(p, ${rv(FARM_RECT)}, 1.5); }
 float bldgMask(vec2 p) {
   float m = 0.0;
@@ -248,16 +260,17 @@ scene.add(sun, sun.target);
 // ---------------------------------------------------------------------------
 // Nublado → soleado → atardecer → nublado con lluvia → noche → mañana
 // ---------------------------------------------------------------------------
-const DAY_SECONDS = 480;
+// Día más corto de sol. Atardecer, noche y mañana duran lo mismo y bastante más que antes.
+const DAY_SECONDS = 640;
 const C = (h) => new THREE.Color(h);
 const DAY_KEYS = [
   { t: 0.00, name: 'Nublado', rain: 0, tint: C('#c8ccd1'), top: C('#7d8894'), fog: C('#6e787f'), glow: C('#000000'), cloud: 1, stars: 0, sunI: 0.35, sunC: C('#dfe6ee'), hemiI: 1.45, hemiS: C('#d5dde5'), hemiG: C('#4f5f3c'), exp: 1.0, env: 0.45, el: 0.55, fogD: 0.0022 },
-  { t: 0.12, name: 'Soleado', rain: 0, tint: C('#ffffff'), top: C('#1267c2'), fog: C('#5f94b8'), glow: C('#fff2d0'), cloud: 0, stars: 0, sunI: 2.7, sunC: C('#fff0d2'), hemiI: 1.15, hemiS: C('#d6ecff'), hemiG: C('#56732f'), exp: 1.05, env: 0.35, el: 0.89, fogD: 0.0010 },
-  { t: 0.40, name: 'Soleado', rain: 0, tint: C('#ffffff'), top: C('#1267c2'), fog: C('#5f94b8'), glow: C('#fff2d0'), cloud: 0, stars: 0, sunI: 2.7, sunC: C('#fff0d2'), hemiI: 1.15, hemiS: C('#d6ecff'), hemiG: C('#56732f'), exp: 1.05, env: 0.35, el: 0.72, fogD: 0.0010 },
-  { t: 0.46, name: 'Atardecer', rain: 0, tint: C('#ffb98c'), top: C('#33508a'), fog: C('#c47a52'), glow: C('#ff8a40'), cloud: 0.25, stars: 0.05, sunI: 1.7, sunC: C('#ff9a5a'), hemiI: 0.7, hemiS: C('#ffc6a0'), hemiG: C('#47532a'), exp: 0.95, env: 0.22, el: 0.12, fogD: 0.0015 },
-  { t: 0.58, name: 'Nublado', rain: 1, tint: C('#b7bcc2'), top: C('#6d7884'), fog: C('#5e686f'), glow: C('#000000'), cloud: 1, stars: 0, sunI: 0.28, sunC: C('#d5dde6'), hemiI: 1.35, hemiS: C('#c9d2db'), hemiG: C('#465636'), exp: 0.95, env: 0.4, el: 0.4, fogD: 0.0026 },
-  { t: 0.70, name: 'Noche', rain: 0, tint: C('#1f2747'), top: C('#050b1e'), fog: C('#10182c'), glow: C('#000000'), cloud: 0.1, stars: 1, sunI: 0.4, sunC: C('#9fb8ff'), hemiI: 0.35, hemiS: C('#5070b0'), hemiG: C('#1c2618'), exp: 0.9, env: 0.08, el: 0.5, fogD: 0.0016 },
-  { t: 0.86, name: 'Mañana', rain: 0, tint: C('#fff0dc'), top: C('#2f74c4'), fog: C('#7eabca'), glow: C('#ffd8a0'), cloud: 0.05, stars: 0, sunI: 2.3, sunC: C('#ffe0b8'), hemiI: 1.0, hemiS: C('#e2ecff'), hemiG: C('#56732f'), exp: 1.0, env: 0.3, el: 0.42, fogD: 0.0012 },
+  { t: 0.06, name: 'Soleado', rain: 0, tint: C('#ffffff'), top: C('#1267c2'), fog: C('#5f94b8'), glow: C('#fff2d0'), cloud: 0, stars: 0, sunI: 2.7, sunC: C('#fff0d2'), hemiI: 1.15, hemiS: C('#d6ecff'), hemiG: C('#56732f'), exp: 1.05, env: 0.35, el: 0.89, fogD: 0.0010 },
+  { t: 0.24, name: 'Soleado', rain: 0, tint: C('#ffffff'), top: C('#1267c2'), fog: C('#5f94b8'), glow: C('#fff2d0'), cloud: 0, stars: 0, sunI: 2.7, sunC: C('#fff0d2'), hemiI: 1.15, hemiS: C('#d6ecff'), hemiG: C('#56732f'), exp: 1.05, env: 0.35, el: 0.72, fogD: 0.0010 },
+  { t: 0.28, name: 'Atardecer', rain: 0, tint: C('#ffb98c'), top: C('#33508a'), fog: C('#c47a52'), glow: C('#ff8a40'), cloud: 0.25, stars: 0.05, sunI: 1.7, sunC: C('#ff9a5a'), hemiI: 0.7, hemiS: C('#ffc6a0'), hemiG: C('#47532a'), exp: 0.95, env: 0.22, el: 0.12, fogD: 0.0015 },
+  { t: 0.50, name: 'Nublado', rain: 1, tint: C('#b7bcc2'), top: C('#6d7884'), fog: C('#5e686f'), glow: C('#000000'), cloud: 1, stars: 0, sunI: 0.28, sunC: C('#d5dde6'), hemiI: 1.35, hemiS: C('#c9d2db'), hemiG: C('#465636'), exp: 0.95, env: 0.4, el: 0.4, fogD: 0.0026 },
+  { t: 0.56, name: 'Noche', rain: 0, tint: C('#1f2747'), top: C('#050b1e'), fog: C('#10182c'), glow: C('#000000'), cloud: 0.1, stars: 1, sunI: 0.4, sunC: C('#9fb8ff'), hemiI: 0.35, hemiS: C('#5070b0'), hemiG: C('#1c2618'), exp: 0.9, env: 0.08, el: 0.5, fogD: 0.0016 },
+  { t: 0.78, name: 'Mañana', rain: 0, tint: C('#fff0dc'), top: C('#2f74c4'), fog: C('#7eabca'), glow: C('#ffd8a0'), cloud: 0.05, stars: 0, sunI: 2.3, sunC: C('#ffe0b8'), hemiI: 1.0, hemiS: C('#e2ecff'), hemiG: C('#56732f'), exp: 1.0, env: 0.3, el: 0.42, fogD: 0.0012 },
 ];
 const SKY_U = {
   uTop: { value: new THREE.Color() }, uTint: { value: new THREE.Color() }, uGlow: { value: new THREE.Color() },
@@ -306,7 +319,7 @@ const U = {
 const loadBar = document.getElementById('loadBar');
 const loadText = document.getElementById('loadText');
 const progress = {};
-const EXPECTED = { cow: 5.8e6, farm: 2.3e6, wheat: 9.0e6, grass: 14.5e6, barn: 18.6e6, chapel: 8.7e6, windmill: 2.4e6, birch_mid: 3.2e6, birch_far: 0.9e6, bare: 0.55e6, house: 7.9e6, bale: 0.33e6, bull: 4.82e6, tractor: 6.7e6, harvest: 5.13e6, truck: 4.5e6, trough: 4.6e6, bus: 5.4e6, shelter: 8.6e6, horse: 2.29e6, pig: 1.24e6, duck: 1.53e6, hen: 1.29e6, industria2: 5.2e7 };
+const EXPECTED = { cow: 5.8e6, farm: 2.3e6, wheat: 9.0e6, grass: 14.5e6, barn: 18.6e6, chapel: 8.7e6, windmill: 2.4e6, birch_mid: 3.2e6, birch_far: 0.9e6, bare: 0.55e6, house: 7.9e6, bale: 0.33e6, bull: 4.82e6, tractor: 6.7e6, harvest: 5.13e6, truck: 4.5e6, trough: 4.6e6, bus: 5.4e6, horse: 2.29e6, pig: 1.24e6, duck: 1.53e6, hen: 1.29e6, industria2: 5.2e7 };
 function updateProgress() {
   const total = Object.values(EXPECTED).reduce((a, b) => a + b, 0);
   const done = Object.entries(progress).reduce((a, [k, v]) => a + Math.min(v, EXPECTED[k]), 0);
@@ -374,7 +387,7 @@ function buildSky(tex) {
           float h = hash(cell);
           float tw = 0.4 + 0.2 * sin(uTime * (2.0 + h * 5.0) + h * 60.0);
           float point = smoothstep(0.38, 0.0, length(fract(grid) - 0.5));
-          c += vec3(0.72, 0.8, 1.0) * step(0.9968, h) * point * tw * 0.45 * uStars * (1.0 - uCloud) * smoothstep(0.08, 0.35, d.y);
+          c += vec3(0.72, 0.8, 1.0) * step(0.9968, h) * point * tw * 0.62 * uStars * (1.0 - uCloud) * smoothstep(0.08, 0.35, d.y);
           c += vec3(0.85, 0.9, 1.0) * smoothstep(0.99955, 0.9997, sd) * uStars;
         }
         c = mix(uHorizon, c, smoothstep(-0.04, 0.2, v));
@@ -1078,12 +1091,8 @@ function updateBus(dt) {
   placeVehicle(bus, loopPose(bus.dist, bus.lane));
 }
 
-const SHELTERS = [
-  { x: -40, z: 32, yaw: 0.4 },
-  { x: 6, z: -18, yaw: -0.5 },
-];
+const SHELTERS = [];
 const SHELTER_S = 5.6;
-const RAIN_PLAN = [0, 0, 1];
 function buildShelters(gltf) {
   const src = gltf.scene;
   src.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; o.material.metalness = 0.04; } });
@@ -1144,9 +1153,8 @@ function beginRain() {
   rain.on = true;
   rain.left = 30;
   rain.used = true;
-  npcs.forEach((c, i) => {
-    c.shelter = SHELTERS[RAIN_PLAN[i]];
-    c.slot = RAIN_PLAN[i] === 0 ? (i === 0 ? -1.5 : 1.5) : 0;
+  npcs.forEach((c) => {
+    c.shelter = null;
     c.asleep = 0;
     if (c.food && c.food.claimer === c) { c.food.claimer = null; c.food.chewing = false; }
     c.food = null;
@@ -2803,9 +2811,9 @@ function updateCamera(dt, t) {
 // ---------------------------------------------------------------------------
 async function init() {
   connectNet();
-  const [cowG, farmG, wheatG, grassG, barnG, chapelG, millG, birchMidG, birchFarG, bareG, houseG, baleG, bullG, tractorG, harvestG, truckG, troughG, busG, shelterG, horseG, pigG, duckG, henG, plantaG, skyT, grassT, zzzT] = await Promise.all([
+  const [cowG, farmG, wheatG, grassG, barnG, chapelG, millG, birchMidG, birchFarG, bareG, houseG, baleG, bullG, tractorG, harvestG, truckG, troughG, busG, horseG, pigG, duckG, henG, plantaG, skyT, grassT, zzzT] = await Promise.all([
     loadGLB('cow'), loadGLB('farm'), loadGLB('wheat'), loadGLB('grass'),
-    loadGLB('barn'), loadGLB('chapel'), loadGLB('windmill'), loadGLB('birch_mid'), loadGLB('birch_far'), loadGLB('bare'), loadGLB('house'), loadGLB('bale'), loadGLB('bull'), loadGLB('tractor'), loadGLB('harvest'), loadGLB('truck'), loadGLB('trough'), loadGLB('bus'), loadGLB('shelter'), loadGLB('horse'), loadGLB('pig'), loadGLB('duck'), loadGLB('hen'), loadGLB('industria2'),
+    loadGLB('barn'), loadGLB('chapel'), loadGLB('windmill'), loadGLB('birch_mid'), loadGLB('birch_far'), loadGLB('bare'), loadGLB('house'), loadGLB('bale'), loadGLB('bull'), loadGLB('tractor'), loadGLB('harvest'), loadGLB('truck'), loadGLB('trough'), loadGLB('bus'), loadGLB('horse'), loadGLB('pig'), loadGLB('duck'), loadGLB('hen'), loadGLB('industria2'),
     loadTex('assets/cielo_loop.jpg'), loadTex('assets/suelo.png'), loadTex('assets/zzz.png'),
   ]);
   loadText.textContent = 'Plantando el trigo…';
@@ -2819,7 +2827,6 @@ async function init() {
   buildTractor(tractorG);
   buildTruck(truckG);
   buildBus(busG);
-  buildShelters(shelterG);
   buildTrough(troughG, zzzT);
   buildRain();
   buildHarvest(harvestG);
@@ -2834,8 +2841,12 @@ async function init() {
   const realWheat = [];
   for (let x = 62; x < 80; x += 2.3) for (const side of [-1, 1]) realWheat.push({ x: x + rand() * 0.6, z: side * (3.4 + rand() * 0.8), rot: rand() * 6, k: 0.85 + rand() * 0.3 });
   for (let i = 0; i < 6; i++) realWheat.push({ x: WHEAT_PATCH.x0 + 1 + rand() * 4, z: WHEAT_PATCH.z0 + 2 + i * 3.4, rot: rand() * 6, k: 0.9 + rand() * 0.2 });
+  for (const r of WHEAT_PLOTS) {
+    if (r === WHEAT_FIELD || r === WHEAT_PATCH) continue;
+    for (let i = 0; i < 8; i++) realWheat.push({ x: r.x0 + 3 + rand() * (r.x1 - r.x0 - 6), z: r.z0 + 3 + rand() * (r.z1 - r.z0 - 6), rot: rand() * 6, k: 0.85 + rand() * 0.3 });
+  }
   const wheatCards = [];
-  for (const r of [WHEAT_FIELD, WHEAT_PATCH]) {
+  for (const r of WHEAT_PLOTS) {
     for (let x = r.x0 - 2; x < r.x1 + 2; x += 0.62) for (let z = r.z0 - 2; z < r.z1 + 2; z += 0.62) {
       const px = x + (rand() - 0.5) * 0.6, pz = z + (rand() - 0.5) * 0.6;
       const m = wheatMask(px, pz);
