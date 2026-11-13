@@ -2082,6 +2082,11 @@ addEventListener('keydown', (e) => {
     if (typeof race !== 'undefined' && race.state === 'run') { race.taps.push(clock.elapsedTime); return; }
     tryCharge();
   }
+  if (e.code === 'KeyQ') {
+    if (e.repeat) return;
+    if (player && roleOf(player).sleep && needs.sleepy) return;
+    moo();
+  }
 });
 addEventListener('keyup', (e) => { keys[e.code] = false; });
 addEventListener('blur', () => { for (const k in keys) keys[k] = false; });
@@ -2128,8 +2133,7 @@ function tryCharge() {
   player.charge = CHARGE_TIME;
   player.chargeHits = new Set();
   chargeCool = CHARGE_COOL;
-  mooT = 0.55;
-  playMoo(0.18, 1.18);
+  playHay();
 }
 function chargeAmount(cow) {
   const left = cow && cow.charge || 0;
@@ -2212,7 +2216,7 @@ const REMOTE_TINTS = [
   [0.98, 0.94, 0.84],
   [0.9, 0.98, 0.96],
 ];
-const net = { ws: null, id: null, spawn: null, placed: false, acc: 0, tries: 0, status: 'off' };
+const net = { ws: null, id: null, spawn: null, placed: false, acc: 0, tries: 0, status: 'off', jump: false };
 const remotes = new Map();
 const queued = new Map();
 window.__net = net;
@@ -2361,6 +2365,8 @@ function applyNetSpawn() {
 }
 function sendState() {
   if (!player || !net.ws || net.ws.readyState !== 1) return;
+  const jump = net.jump ? 1 : 0;
+  net.jump = false;
   net.ws.send(JSON.stringify({
     t: 's',
     x: +player.pos.x.toFixed(2),
@@ -2372,22 +2378,26 @@ function sendState() {
     k: +Math.min(1, player.kneel || 0).toFixed(2),
     g: eaten | 0,
     a: ROLE_CODE[player.role] || 'v',
+    j: jump,
   }));
 }
 function updateRemotes(dt, t) {
-  const k = 1 - Math.exp(-dt * 12);
   for (const cow of remotes.values()) {
     const n = cow.net;
     const knocked = Math.hypot(cow.knockX || 0, cow.knockZ || 0) > 0.08 || (cow.stun || 0) > 0;
     if (!knocked) {
-      if (Math.hypot(n.x - cow.pos.x, n.z - cow.pos.z) > 12) {
-        cow.pos.x = n.x; cow.pos.z = n.z; cow.yaw = n.yaw;
-      } else {
-        cow.pos.x += (n.x - cow.pos.x) * k;
-        cow.pos.z += (n.z - cow.pos.z) * k;
-        cow.yaw = lerpAngle(cow.yaw, n.yaw, k);
+      const dx = n.x - cow.pos.x, dz = n.z - cow.pos.z;
+      const dist = Math.hypot(dx, dz);
+      if (dist > 24) {
+        cow.pos.x = n.x; cow.pos.z = n.z; cow.yaw = n.yaw; cow.speed = n.speed;
+      } else if (dist > 1e-4) {
+        const pace = Math.max(Math.abs(n.speed), 1.6) * (dist > 3 ? 2.4 : 1.15);
+        const step = Math.min(dist, pace * dt);
+        cow.pos.x += dx / dist * step;
+        cow.pos.z += dz / dist * step;
+        cow.yaw = lerpAngle(cow.yaw, n.yaw, 1 - Math.exp(-dt * 6));
       }
-      cow.speed += (n.speed - cow.speed) * k;
+      cow.speed += (n.speed - cow.speed) * Math.min(1, dt * 8);
     }
     applyKnockMotion(cow, dt);
     cow.eat += (n.eat - cow.eat) * Math.min(1, dt * 6);
@@ -2444,6 +2454,7 @@ function respawn() {
   player.pos.set(home.x, 0, home.z);
   player.yaw = home.yaw;
   player.speed = 0;
+  net.jump = true;
   player.turn = 0;
   player.asleep = 0;
   player.kneel = 0;
@@ -3504,7 +3515,7 @@ function frame() {
   separateCows();
   if (player) {
     net.acc += dt;
-    if (net.acc >= 1 / 15) { net.acc = 0; sendState(); }
+    if (net.acc >= 1 / 20 || net.jump) { net.acc = 0; sendState(); }
   }
   updateCamera(dt, t);
   U.uCow.value.copy(player.pos);

@@ -155,8 +155,26 @@ wss.on('connection', (ws) => {
     if (!msg || msg.t !== 's') return;
     const p = players.get(ws);
     if (!p) return;
-    p.x = clamp(msg.x, -450, 450, p.x);
-    p.z = clamp(msg.z, -450, 450, p.z);
+    const nx = clamp(msg.x, -450, 450, p.x);
+    const nz = clamp(msg.z, -450, 450, p.z);
+    const now = Date.now();
+    if (!p.seen || msg.j) {
+      p.x = nx;
+      p.z = nz;
+      p.seen = true;
+    } else {
+      const dt = Math.min(0.5, Math.max(0.02, (now - (p.at || now)) / 1000));
+      const maxD = (Math.abs(clamp(msg.v, -3, 12, 0)) + 8) * dt + 2;
+      const dx = nx - p.x, dz = nz - p.z, d = Math.hypot(dx, dz);
+      if (d > maxD && d > 0) {
+        p.x += dx / d * maxD;
+        p.z += dz / d * maxD;
+      } else {
+        p.x = nx;
+        p.z = nz;
+      }
+    }
+    p.at = now;
     p.yaw = clamp(msg.y, -100, 100, p.yaw);
     p.speed = clamp(msg.v, -3, 12, 0);
     p.eat = clamp(msg.e, 0, 1, 0);
