@@ -1464,46 +1464,51 @@ class CowRig {
     if (y) c.bone.quaternion.premultiply(_q.setFromAxisAngle(c.axes.Y, y));
     if (z) c.bone.quaternion.premultiply(_q.setFromAxisAngle(c.axes.Z, z));
   }
-  update(dt, t, { speed, eat = 0, moo = 0, turn = 0, kneel = 0 }) {
+  update(dt, t, { speed, eat = 0, moo = 0, turn = 0, kneel = 0, charge = 0 }) {
     const k = Math.max(0, Math.min(1, kneel));
-    const gait = sstep(WALK_SPEED * 1.1, TROT_SPEED * 0.9, Math.abs(speed));
+    const ch = Math.max(0, Math.min(1, charge));
+    // The body covers ground fast, but the legs stay on a heavy walk so the charge doesn't look like a scramble.
+    const legSpeed = speed / (1 + ch * 2.6);
+    const gait = sstep(WALK_SPEED * 1.1, TROT_SPEED * 0.9, Math.abs(legSpeed));
     const stride = 1.5 + gait * 3.6;
-    this.phase += (speed / stride) * dt;
-    const move = Math.min(1, Math.abs(speed) / 0.6) * (1 - k);
-    const amp = (0.26 + gait * 0.16) * move;
-    const lift = (0.45 + gait * 0.3) * move;
+    this.phase += (legSpeed / stride) * dt;
+    const move = Math.min(1, Math.abs(legSpeed) / 0.6) * (1 - k);
+    const amp = (0.26 + gait * 0.16 + ch * 0.08) * move;
+    const lift = (0.45 + gait * 0.3 + ch * 0.06) * move;
     for (const leg of this.legs) {
       const ph = (this.phase + leg.walk + (leg.trot - leg.walk) * gait) * Math.PI * 2;
       const sw = Math.sin(ph) * amp;
       const lf = Math.max(0, -Math.cos(ph)) * lift;
       if (leg.kind === 'front') {
         const [sh, up, el, kn] = leg.d;
-        this.rot(sh, sw * 0.45);
-        this.rot(up, sw * 0.55 + k * 0.85);
+        this.rot(sh, sw * 0.45 + ch * 0.12);
+        this.rot(up, sw * 0.55 + k * 0.85 + ch * 0.2);
         this.rot(el, -lf * 0.25 - k * 0.3);
         this.rot(kn, lf + k * 1.55);
       } else {
         const d = leg.d;
-        if (d.hip) this.rot(d.hip[0], sw * d.hip[1] - k * 0.35);
-        this.rot(d.up[0], sw * d.up[1] + lf * 0.2 + k * 0.9);
+        if (d.hip) this.rot(d.hip[0], sw * d.hip[1] - k * 0.35 + ch * 0.08);
+        this.rot(d.up[0], sw * d.up[1] + lf * 0.2 + k * 0.9 + ch * 0.15);
         this.rot(d.hock, -lf * 0.7 - k * 1.7);
       }
     }
     const bob = Math.sin(this.phase * Math.PI * 4);
-    this.rot('Bone_023', 0, 0, Math.sin(this.phase * Math.PI * 2) * 0.03 * move);
-    this.rot('Bone_021', 0, turn * 0.12, 0);
+    this.rot('Bone_023', ch * 0.22, 0, Math.sin(this.phase * Math.PI * 2) * 0.03 * move);
+    this.rot('Bone_021', ch * 0.12, turn * 0.12 * (1 - ch * 0.7), 0);
+    this.surge = ch * 0.18;
+    this.bounce = Math.abs(bob) * 0.02 * ch;
 
-    // Head: idle glances, walking nod, grazing, mooing
+    // Head: idle glances, walking nod, grazing, mooing, charge dip
     this.lookT -= dt;
     if (this.lookT < 0) { this.lookT = 2 + Math.random() * 4; this.lookTarget = (Math.random() - 0.5) * 0.9 * (1 - move * 0.7); }
-    this.look += (this.lookTarget + turn * 0.25 - this.look) * Math.min(1, dt * 2.5);
+    this.look += ((1 - ch) * (this.lookTarget + turn * 0.25) - this.look) * Math.min(1, dt * 2.5);
     const nod = bob * 0.04 * move;
     this.chew += dt * 9;
     const chew = eat * 0.12 * Math.max(0, Math.sin(this.chew));
-    this.rot('Bone_027', eat * 0.8 + nod - moo * 0.1 - k * 0.45, this.look * 0.45, 0);
-    this.rot('Bone_026', eat * 0.15 + nod * 0.5 - moo * 0.15 - k * 0.25, this.look * 0.3, 0);
-    this.rot('Bone_025', eat * 0.03 - moo * 0.2, this.look * 0.25, 0);
-    this.rot('Bone_043', moo * 0.35 + chew, 0, 0);
+    this.rot('Bone_027', eat * 0.8 + nod - moo * 0.1 - k * 0.45 + ch * 0.72, this.look * 0.45, 0);
+    this.rot('Bone_026', eat * 0.15 + nod * 0.5 - moo * 0.15 - k * 0.25 + ch * 0.38, this.look * 0.3, 0);
+    this.rot('Bone_025', eat * 0.03 - moo * 0.2 + ch * 0.12, this.look * 0.25, 0);
+    this.rot('Bone_043', moo * 0.35 + chew - ch * 0.08, 0, 0);
 
     // Ears twitch
     ['Bone_047', 'Bone_049'].forEach((n, i) => {
@@ -1943,6 +1948,10 @@ function become(next) {
   made.eat = 0;
   made.kneel = 0;
   made.asleep = 0;
+  made.charge = 0;
+  made.chargePose = 0;
+  made.chargeHits = null;
+  chargeCool = 0;
   player = made;
   if (window.__game) window.__game.player = player;
   placeCow(player, 1);
@@ -2028,7 +2037,7 @@ addEventListener('keydown', (e) => {
     e.preventDefault();
     if (e.repeat) return;
     if (typeof race !== 'undefined' && race.state === 'run') { race.taps.push(clock.elapsedTime); return; }
-    moo();
+    tryCharge();
   }
 });
 addEventListener('keyup', (e) => { keys[e.code] = false; });
@@ -2057,11 +2066,83 @@ let cowGltf = null, horseGltf = null, pigGltf = null, henGltf = null, duckGltf =
 let eaten = 0, eatTimer = 0, eatBite = null;
 const EAT_HOLD = 1.7;
 let mooT = 0;
+let chargeCool = 0;
+const CHARGE_TIME = 0.62;
+const CHARGE_COOL = 1.25;
+const CHARGE_SPEED = 9.4;
 const clock = new THREE.Clock();
 function moo() {
   if (!player || !roleOf(player).moo || mooT > 0) return;
   mooT = 1.8;
   playMoo(0.2, 1);
+}
+function tryCharge() {
+  if (!player) return;
+  if (player.role !== 'cow') { moo(); return; }
+  if (player.hurt > 0 || player.asleep > 0) return;
+  if (typeof race !== 'undefined' && race.state !== 'idle') return;
+  if (chargeCool > 0 || (player.charge || 0) > 0) return;
+  player.charge = CHARGE_TIME;
+  player.chargeHits = new Set();
+  chargeCool = CHARGE_COOL;
+  mooT = 0.55;
+  playMoo(0.18, 1.18);
+}
+function chargeAmount(cow) {
+  const left = cow && cow.charge || 0;
+  if (left <= 0) return 0;
+  // Wind-up dip, then full lunge.
+  return left > CHARGE_TIME - 0.14 ? 0.55 : 1;
+}
+function knockCow(target, fx, fz, power) {
+  if (!target || target === player) return;
+  const d = Math.hypot(fx, fz) || 1;
+  target.knockX = (target.knockX || 0) + (fx / d) * power;
+  target.knockZ = (target.knockZ || 0) + (fz / d) * power;
+  target.stun = Math.max(target.stun || 0, 0.55);
+  target.speed = 0;
+  target.eat = 0;
+  if (target.food && target.food.claimer === target) {
+    target.food.claimer = null;
+    target.food.chewing = false;
+    target.food = null;
+  }
+  target.state = 'idle';
+  target.timer = 0.8 + rand() * 0.6;
+}
+function applyKnockMotion(c, dt) {
+  if (!c) return;
+  if (c.stun > 0) c.stun -= dt;
+  const kx = c.knockX || 0, kz = c.knockZ || 0;
+  if (Math.abs(kx) < 0.03 && Math.abs(kz) < 0.03) {
+    c.knockX = 0; c.knockZ = 0;
+    return;
+  }
+  c.pos.x += kx * dt;
+  c.pos.z += kz * dt;
+  collideCow(c.pos, c.yaw, roleOf(c).collide);
+  const damp = Math.exp(-dt * 4.2);
+  c.knockX = kx * damp;
+  c.knockZ = kz * damp;
+}
+function tryRamHits() {
+  if (!player || player.role !== 'cow' || !(player.charge > 0)) return;
+  if (chargeAmount(player) < 0.9) return;
+  const fx = Math.sin(player.yaw), fz = Math.cos(player.yaw);
+  const hits = player.chargeHits || (player.chargeHits = new Set());
+  const targets = [...npcs, ...remotes.values()];
+  for (const t of targets) {
+    if (!t || t.role && t.role !== 'cow') continue;
+    if (hits.has(t)) continue;
+    const dx = t.pos.x - player.pos.x, dz = t.pos.z - player.pos.z;
+    const d = Math.hypot(dx, dz);
+    if (d < 0.2 || d > 2.85) continue;
+    const along = dx * fx + dz * fz;
+    if (along < 0.35 || along / d < 0.52) continue;
+    hits.add(t);
+    knockCow(t, fx * 0.75 + dx / d * 0.35, fz * 0.75 + dz / d * 0.35, 17.5);
+    player.speed *= 0.72;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -2241,19 +2322,26 @@ function updateRemotes(dt, t) {
   const k = 1 - Math.exp(-dt * 12);
   for (const cow of remotes.values()) {
     const n = cow.net;
-    if (Math.hypot(n.x - cow.pos.x, n.z - cow.pos.z) > 12) {
-      cow.pos.x = n.x; cow.pos.z = n.z; cow.yaw = n.yaw;
-    } else {
-      cow.pos.x += (n.x - cow.pos.x) * k;
-      cow.pos.z += (n.z - cow.pos.z) * k;
-      cow.yaw = lerpAngle(cow.yaw, n.yaw, k);
+    const knocked = Math.hypot(cow.knockX || 0, cow.knockZ || 0) > 0.08 || (cow.stun || 0) > 0;
+    if (!knocked) {
+      if (Math.hypot(n.x - cow.pos.x, n.z - cow.pos.z) > 12) {
+        cow.pos.x = n.x; cow.pos.z = n.z; cow.yaw = n.yaw;
+      } else {
+        cow.pos.x += (n.x - cow.pos.x) * k;
+        cow.pos.z += (n.z - cow.pos.z) * k;
+        cow.yaw = lerpAngle(cow.yaw, n.yaw, k);
+      }
+      cow.speed += (n.speed - cow.speed) * k;
     }
-    cow.speed += (n.speed - cow.speed) * k;
+    applyKnockMotion(cow, dt);
     cow.eat += (n.eat - cow.eat) * Math.min(1, dt * 6);
     cow.moo += (n.moo - cow.moo) * Math.min(1, dt * 8);
     cow.kneel = (cow.kneel || 0) + (n.kneel - (cow.kneel || 0)) * Math.min(1, dt * 4);
     if (cow.tag && (cow.got | 0) !== (n.got | 0)) { cow.got = n.got | 0; drawTag(cow.tag, cow.got); }
-    const bob = cow.rig.update(dt, t + (Math.abs(n.id | 0) % 7), { speed: cow.speed, eat: cow.eat, moo: cow.moo, turn: 0, kneel: cow.kneel || 0 });
+    const bob = cow.rig.update(dt, t + (Math.abs(n.id | 0) % 7), {
+      speed: knocked ? Math.hypot(cow.knockX || 0, cow.knockZ || 0) * 0.4 : cow.speed,
+      eat: cow.eat, moo: cow.moo, turn: 0, kneel: cow.kneel || 0,
+    });
     placeCow(cow, dt);
     cow.model.position.y = cow.role === 'cow' ? Math.abs(bob) * 0.015 * Math.min(1, Math.abs(cow.speed)) : (cow.rig.bounce || 0);
     cow.model.position.z = cow.rig.surge || 0;
@@ -2379,28 +2467,41 @@ function updatePlayer(dt, t) {
     const want = Math.min(1, (race.taps.length / 0.55) / 8);
     race.boost += (want - race.boost) * Math.min(1, dt * 7);
   }
+  chargeCool = Math.max(0, chargeCool - dt);
+  if (player.charge > 0) player.charge = Math.max(0, player.charge - dt);
+  const charging = player.role === 'cow' && player.charge > 0;
+  const lunge = charging ? chargeAmount(player) : 0;
+  const poseTarget = lunge;
+  const poseRate = poseTarget > (player.chargePose || 0) ? 4.2 : 1.35;
+  player.chargePose = (player.chargePose || 0) + (poseTarget - (player.chargePose || 0)) * Math.min(1, dt * poseRate);
+  if (player.chargePose < 0.01) player.chargePose = 0;
+  const ch = player.chargePose;
   let target = 0;
-  if (race.state === 'run') {
+  if (charging) target = lunge < 0.9 ? R.walk * 0.55 : CHARGE_SPEED;
+  else if (race.state === 'run') {
     const mash = RACE_SLOW + (RACE_TOP - RACE_SLOW) * race.boost;
-    if (fwd) target = mash; else if (back) target = -R.walk * 0.45;
+    if (fwd) target = mash; else if (back) target = -R.walk * 0.65;
   } else if (race.state === 'done') target = 0;
-  else if (race.state !== 'idle' || !R.hay || !keys.KeyE) { if (fwd) target = run ? R.run : R.walk; else if (back) target = -R.walk * 0.45; }
-  const accel = race.state === 'run' ? 5 : target === 0 ? 3 : run ? 3.4 : 1.6;
+  else if (race.state !== 'idle' || !R.hay || !keys.KeyE) { if (fwd) target = run ? R.run : R.walk; else if (back) target = -R.walk * 0.65; }
+  const accel = charging ? (lunge < 0.9 ? 4 : 6.5) : race.state === 'run' ? 5 : target === 0 ? 3 : run ? 3.4 : 1.6;
   player.speed += (target - player.speed) * Math.min(1, dt * accel);
-  const turnIn = (left ? 1 : 0) - (right ? 1 : 0);
+  const turnIn = charging ? ((left ? 1 : 0) - (right ? 1 : 0)) * 0.35 : (left ? 1 : 0) - (right ? 1 : 0);
   player.turn += (turnIn - player.turn) * Math.min(1, dt * 4);
-  player.yaw += player.turn * (0.85 + 0.25 * Math.min(1, Math.abs(player.speed))) * dt;
+  player.yaw += player.turn * (0.85 + 0.25 * Math.min(1, Math.abs(player.speed))) * dt * (charging ? 0.55 : 1);
   player.pos.x += Math.sin(player.yaw) * player.speed * dt;
   player.pos.z += Math.cos(player.yaw) * player.speed * dt;
   collideCow(player.pos, player.yaw, R.collide);
+  if (charging) tryRamHits();
 
   mooT = Math.max(0, mooT - dt);
   player.moo += ((R.moo && mooT > 0.2 ? 1 : 0) - player.moo) * Math.min(1, dt * 6);
   easeKneel(player, dt);
   const shown = race.state === 'run' || race.state === 'done' ? animSpeed(player) : player.speed;
-  const bob = player.rig.update(dt, t, { speed: shown, eat: player.eat, moo: player.moo, turn: player.turn, kneel: player.kneel || 0 });
+  const bob = player.rig.update(dt, t, { speed: shown, eat: charging ? 0 : player.eat, moo: player.moo, turn: player.turn, kneel: player.kneel || 0, charge: ch });
   placeCow(player, dt);
-  player.model.position.y = player.role === 'cow' ? Math.abs(bob) * 0.015 * Math.min(1, Math.abs(player.speed)) : (player.rig.bounce || 0);
+  player.model.position.y = player.role === 'cow'
+    ? Math.abs(bob) * 0.015 * Math.min(1, Math.abs(player.speed)) + (player.rig.bounce || 0)
+    : (player.rig.bounce || 0);
   player.model.position.z = player.rig.surge || 0;
 
   const bite = R.hay && keys.KeyE && Math.abs(player.speed) < 0.4 ? nearestHarvest(R.reach) : null;
@@ -2471,6 +2572,15 @@ function steerCow(c, tx, tz, dt, pace) {
 }
 
 function updateNpc(c, dt, t) {
+  applyKnockMotion(c, dt);
+  if (c.stun > 0) {
+    c.speed = 0;
+    c.turn *= 0.8;
+    easeKneel(c, dt);
+    c.rig.update(dt, t + c.seed, { speed: Math.hypot(c.knockX || 0, c.knockZ || 0) * 0.35, eat: 0, moo: 0, turn: 0, kneel: c.kneel || 0 });
+    placeCow(c, dt);
+    return;
+  }
   if (rain.on && c.shelter) {
     c.asleep = 0;
     const spot = shelterPoint(c.shelter, c.slot || 0);
