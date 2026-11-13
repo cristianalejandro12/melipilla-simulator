@@ -2142,7 +2142,7 @@ function chargeAmount(cow) {
   return left > CHARGE_TIME - 0.14 ? 0.55 : 1;
 }
 function knockCow(target, fx, fz, power) {
-  if (!target || target === player) return;
+  if (!target) return;
   const d = Math.hypot(fx, fz) || 1;
   target.knockX = (target.knockX || 0) + (fx / d) * power;
   target.knockZ = (target.knockZ || 0) + (fz / d) * power;
@@ -2182,8 +2182,10 @@ function ramOne(t, fx, fz, hits, reach) {
   if (along < 0.35 || along / d < 0.52) return false;
   hits.add(t);
   const px = fx * 0.75 + dx / d * 0.35, pz = fz * 0.75 + dz / d * 0.35;
-  if (t.pos) knockCow(t, px, pz, 40);
-  else {
+  if (t.pos) {
+    knockCow(t, px, pz, 40);
+    if (t.net) sendKnock(t.net.id, px, pz);
+  } else {
     const n = Math.hypot(px, pz) || 1;
     t.knockX = (t.knockX || 0) + px / n * 40;
     t.knockZ = (t.knockZ || 0) + pz / n * 40;
@@ -2252,6 +2254,7 @@ function connectNet() {
     if (!msg || typeof msg !== 'object') return;
     if (msg.t === 'w') onWelcome(msg);
     else if (msg.t === 's') onRemoteState(msg);
+    else if (msg.t === 'k') onKnock(msg);
     else if (msg.t === 'l') removeRemote(msg.id);
   };
   ws.onclose = () => {
@@ -2361,6 +2364,21 @@ function applyNetSpawn() {
     cam.target.copy(look);
     camera.position.copy(look).add(off);
     camera.lookAt(look);
+  }
+}
+function sendKnock(id, fx, fz) {
+  if (!net.ws || net.ws.readyState !== 1 || id == null) return;
+  net.ws.send(JSON.stringify({ t: 'k', id, x: +fx.toFixed(3), z: +fz.toFixed(3) }));
+}
+function onKnock(msg) {
+  const id = Number(msg.id);
+  const fx = Number(msg.x), fz = Number(msg.z);
+  const power = Math.min(40, Math.max(0, Number(msg.p) || 0));
+  if (!player || !Number.isFinite(id) || !Number.isFinite(fx) || !Number.isFinite(fz) || power <= 0) return;
+  if (id === net.id) knockCow(player, fx, fz, power);
+  else {
+    const cow = remotes.get(id);
+    if (cow) knockCow(cow, fx, fz, power);
   }
 }
 function sendState() {
@@ -2474,6 +2492,8 @@ function blockFullShelter() {
 }
 
 function updatePlayer(dt, t) {
+  applyKnockMotion(player, dt);
+  if (player.stun > 0) player.asleep = 0;
   const R = roleOf(player);
   const eNow = !!keys.KeyE;
   const qNow = !!keys.KeyQ, qTap = qNow && !qHeld;
@@ -2550,6 +2570,7 @@ function updatePlayer(dt, t) {
     if (fwd) target = mash; else if (back) target = -R.walk * 0.65;
   } else if (race.state === 'done') target = 0;
   else if (race.state !== 'idle' || !R.hay || !keys.KeyE) { if (fwd) target = run ? R.run : R.walk; else if (back) target = -R.walk * 0.65; }
+  if (player.stun > 0) target = 0;
   const accel = charging ? (lunge < 0.9 ? 4 : 6.5) : race.state === 'run' ? 5 : target === 0 ? 3 : run ? 3.4 : 1.6;
   player.speed += (target - player.speed) * Math.min(1, dt * accel);
   const turnIn = charging ? ((left ? 1 : 0) - (right ? 1 : 0)) * 0.35 : (left ? 1 : 0) - (right ? 1 : 0);

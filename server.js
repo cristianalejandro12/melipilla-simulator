@@ -152,9 +152,24 @@ wss.on('connection', (ws) => {
     if (raw.length > 500) return;
     let msg;
     try { msg = JSON.parse(raw); } catch { return; }
-    if (!msg || msg.t !== 's') return;
+    if (!msg) return;
     const p = players.get(ws);
     if (!p) return;
+    if (msg.t === 'k') {
+      const id = Number(msg.id);
+      const fx = Number(msg.x), fz = Number(msg.z);
+      if (!Number.isFinite(id) || id === p.id || !Number.isFinite(fx) || !Number.isFinite(fz)) return;
+      let victim = null;
+      for (const other of players.values()) if (other.id === id) victim = other;
+      if (!victim || Math.hypot(victim.x - p.x, victim.z - p.z) > 4.5) return;
+      const nowK = Date.now();
+      if (p.knockAt && nowK - p.knockAt < 700) return;
+      p.knockAt = nowK;
+      const n = Math.hypot(fx, fz) || 1;
+      broadcast(ws, { t: 'k', id, x: +(fx / n).toFixed(3), z: +(fz / n).toFixed(3), p: 40 });
+      return;
+    }
+    if (msg.t !== 's') return;
     const nx = clamp(msg.x, -450, 450, p.x);
     const nz = clamp(msg.z, -450, 450, p.z);
     const now = Date.now();
