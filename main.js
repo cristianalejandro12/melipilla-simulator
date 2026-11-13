@@ -697,6 +697,7 @@ const BALES = [
   { x: -17, z: -30, rot: 0.4 },
   { x: -15.1, z: -31.5, rot: 1.3 },
 ];
+const baleField = { mesh: null, boxMinY: 0, s: 1.15, dia: 0, m: new THREE.Matrix4(), q: new THREE.Quaternion() };
 // ---------------------------------------------------------------------------
 // Tractor: drives a slow loop around the wheat field. The GLB is one mesh,
 // so the wheels are spun in the vertex shader by their position.
@@ -897,14 +898,36 @@ function syncHarvest() {
   harvest.mesh.instanceMatrix.needsUpdate = true;
 }
 
+function slideHay(h, dt) {
+  const kx = h.knockX || 0, kz = h.knockZ || 0;
+  if (Math.abs(kx) < 0.03 && Math.abs(kz) < 0.03) {
+    if (kx || kz) { h.knockX = 0; h.knockZ = 0; }
+    return false;
+  }
+  const pos = { x: h.x, z: h.z };
+  pos.x += kx * dt;
+  pos.z += kz * dt;
+  collideCow(pos, 0, 0.35);
+  h.x = pos.x;
+  h.z = pos.z;
+  if (h.rot != null) h.rot += dt * 3.5;
+  else h.yaw = (h.yaw || 0) + dt * 3.5;
+  const damp = Math.exp(-dt * 2.35);
+  h.knockX = kx * damp;
+  h.knockZ = kz * damp;
+  return true;
+}
 function updateHarvest(dt, t) {
   if (!harvest.mesh) return;
   let moving = false;
   for (const h of harvest.slots) {
     if (h.vanish > 0) { h.vanish -= dt; moving = true; }
+    if (h.alive && slideHay(h, dt)) moving = true;
   }
+  for (const b of BALES) if (slideHay(b, dt)) moving = true;
   if (moving) harvest.slots = harvest.slots.filter((h) => h.alive || h.vanish > 0);
   if (eatBite || moving) syncHarvest();
+  if (moving) syncBales();
   const ring = harvest.ring;
   if (eatBite && ring) {
     ring.visible = true;
@@ -948,9 +971,29 @@ function buildBales(gltf) {
   BALES.forEach((b, i) => {
     m.compose(new V3(b.x, terrainH(b.x, b.z) - box.min.y * s + (b.up || 0) * dia * 0.98, b.z), q.setFromAxisAngle(new V3(0, 1, 0), b.rot), new V3(s, s, s));
     mesh.setMatrixAt(i, m);
-    if (!b.up) circles.push({ x: b.x, z: b.z, r: 0.95 });
+    if (!b.up) {
+      b.block = { x: b.x, z: b.z, r: 0.95 };
+      circles.push(b.block);
+    }
   });
+  baleField.mesh = mesh;
+  baleField.boxMinY = box.min.y;
+  baleField.dia = dia;
   scene.add(mesh);
+}
+function syncBales() {
+  const { mesh, boxMinY, s, dia, m, q } = baleField;
+  if (!mesh) return;
+  BALES.forEach((b, i) => {
+    m.compose(
+      new V3(b.x, terrainH(b.x, b.z) - boxMinY * s + (b.up || 0) * dia * 0.98, b.z),
+      q.setFromAxisAngle(AXES.Y, b.rot),
+      new V3(s, s, s),
+    );
+    mesh.setMatrixAt(i, m);
+    if (b.block) { b.block.x = b.x; b.block.z = b.z; }
+  });
+  mesh.instanceMatrix.needsUpdate = true;
 }
 function buildProps() {
   // Water trough
@@ -2125,24 +2168,37 @@ function applyKnockMotion(c, dt) {
   c.knockX = kx * damp;
   c.knockZ = kz * damp;
 }
+function ramOne(t, fx, fz, hits, reach) {
+  if (!t || hits.has(t)) return false;
+  const x = t.pos ? t.pos.x : t.x, z = t.pos ? t.pos.z : t.z;
+  const dx = x - player.pos.x, dz = z - player.pos.z;
+  const d = Math.hypot(dx, dz);
+  if (d < 0.2 || d > reach) return false;
+  const along = dx * fx + dz * fz;
+  if (along < 0.35 || along / d < 0.52) return false;
+  hits.add(t);
+  const px = fx * 0.75 + dx / d * 0.35, pz = fz * 0.75 + dz / d * 0.35;
+  if (t.pos) knockCow(t, px, pz, 40);
+  else {
+    const n = Math.hypot(px, pz) || 1;
+    t.knockX = (t.knockX || 0) + px / n * 40;
+    t.knockZ = (t.knockZ || 0) + pz / n * 40;
+    if (t.claimer) { if (t.claimer.food === t) t.claimer.food = null; t.claimer = null; t.chewing = false; }
+  }
+  player.speed *= 0.72;
+  return true;
+}
 function tryRamHits() {
   if (!player || player.role !== 'cow' || !(player.charge > 0)) return;
   if (chargeAmount(player) < 0.9) return;
   const fx = Math.sin(player.yaw), fz = Math.cos(player.yaw);
   const hits = player.chargeHits || (player.chargeHits = new Set());
-  const targets = [...npcs, ...remotes.values()];
-  for (const t of targets) {
-    if (!t || t.role && t.role !== 'cow') continue;
-    if (hits.has(t)) continue;
-    const dx = t.pos.x - player.pos.x, dz = t.pos.z - player.pos.z;
-    const d = Math.hypot(dx, dz);
-    if (d < 0.2 || d > 2.85) continue;
-    const along = dx * fx + dz * fz;
-    if (along < 0.35 || along / d < 0.52) continue;
-    hits.add(t);
-    knockCow(t, fx * 0.75 + dx / d * 0.35, fz * 0.75 + dz / d * 0.35, 40);
-    player.speed *= 0.72;
+  for (const t of [...npcs, ...horses, ...remotes.values()]) {
+    if (t.role && t.role !== 'cow' && t.role !== 'horse') continue;
+    ramOne(t, fx, fz, hits, t.role === 'horse' ? 3.25 : 2.85);
   }
+  for (const h of harvest.slots) if (h.alive) ramOne(h, fx, fz, hits, 2.35);
+  for (const b of BALES) ramOne(b, fx, fz, hits, 2.15);
 }
 
 // ---------------------------------------------------------------------------
@@ -2741,9 +2797,19 @@ function bolt(h, awayX, awayZ) {
 }
 
 function updateHorse(h, dt, t) {
+  applyKnockMotion(h, dt);
+  if (h.stun > 0) {
+    h.speed = 0;
+    h.turn *= 0.8;
+    h.rig.update(dt, t + h.seed, { speed: Math.hypot(h.knockX || 0, h.knockZ || 0) * 0.25, eat: 0, turn: 0 });
+    placeCow(h, dt);
+    h.model.position.y = h.rig.bounce;
+    return;
+  }
   h.timer -= dt;
   const pd = Math.hypot(player.pos.x - h.pos.x, player.pos.z - h.pos.z);
-  if (h.state !== 'run' && started && pd < 3.6 && Math.abs(player.speed) > 3) bolt(h, h.pos.x - player.pos.x, h.pos.z - player.pos.z);
+  const charging = player && player.role === 'cow' && player.charge > 0;
+  if (!charging && h.state !== 'run' && started && pd < 3.6 && Math.abs(player.speed) > 3) bolt(h, h.pos.x - player.pos.x, h.pos.z - player.pos.z);
 
   const food = null;
   const reach = food ? Math.hypot(food.x - h.pos.x, food.z - h.pos.z) : 99;
