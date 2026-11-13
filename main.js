@@ -2099,7 +2099,7 @@ function knockCow(target, fx, fz, power) {
   const d = Math.hypot(fx, fz) || 1;
   target.knockX = (target.knockX || 0) + (fx / d) * power;
   target.knockZ = (target.knockZ || 0) + (fz / d) * power;
-  target.stun = Math.max(target.stun || 0, 0.55);
+  target.stun = Math.max(target.stun || 0, 1.45);
   target.speed = 0;
   target.eat = 0;
   if (target.food && target.food.claimer === target) {
@@ -2121,7 +2121,7 @@ function applyKnockMotion(c, dt) {
   c.pos.x += kx * dt;
   c.pos.z += kz * dt;
   collideCow(c.pos, c.yaw, roleOf(c).collide);
-  const damp = Math.exp(-dt * 4.2);
+  const damp = Math.exp(-dt * 2.35);
   c.knockX = kx * damp;
   c.knockZ = kz * damp;
 }
@@ -2140,7 +2140,7 @@ function tryRamHits() {
     const along = dx * fx + dz * fz;
     if (along < 0.35 || along / d < 0.52) continue;
     hits.add(t);
-    knockCow(t, fx * 0.75 + dx / d * 0.35, fz * 0.75 + dz / d * 0.35, 17.5);
+    knockCow(t, fx * 0.75 + dx / d * 0.35, fz * 0.75 + dz / d * 0.35, 40);
     player.speed *= 0.72;
   }
 }
@@ -2487,7 +2487,7 @@ function updatePlayer(dt, t) {
   player.speed += (target - player.speed) * Math.min(1, dt * accel);
   const turnIn = charging ? ((left ? 1 : 0) - (right ? 1 : 0)) * 0.35 : (left ? 1 : 0) - (right ? 1 : 0);
   player.turn += (turnIn - player.turn) * Math.min(1, dt * 4);
-  player.yaw += player.turn * (0.85 + 0.25 * Math.min(1, Math.abs(player.speed))) * dt * (charging ? 0.55 : 1);
+  player.yaw += player.turn * (1.1 + 0.32 * Math.min(1, Math.abs(player.speed))) * dt * (charging ? 0.55 : 1);
   player.pos.x += Math.sin(player.yaw) * player.speed * dt;
   player.pos.z += Math.cos(player.yaw) * player.speed * dt;
   collideCow(player.pos, player.yaw, R.collide);
