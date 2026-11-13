@@ -2927,14 +2927,26 @@ async function init() {
 
   loadBar.style.width = '100%';
   loadText.textContent = '';
-  const play = document.getElementById('play');
-  play.style.display = 'block';
-  play.onclick = () => {
-    document.getElementById('intro').classList.add('hidden');
-    document.getElementById('hud').style.display = 'block';
-    started = true;
-    try { initAudio(); } catch (e) { console.warn(e); }
-  };
+  const intro = document.getElementById('intro');
+  let play = document.getElementById('play');
+  if (!play && intro) {
+    play = document.createElement('button');
+    play.id = 'play';
+    play.textContent = 'Iniciar';
+    intro.appendChild(play);
+  }
+  const pick = document.getElementById('pick');
+  if (pick) pick.remove();
+  if (play) {
+    play.style.display = 'block';
+    play.onclick = () => {
+      if (intro) intro.classList.add('hidden');
+      const hud = document.getElementById('hud');
+      if (hud) hud.style.display = 'block';
+      started = true;
+      try { initAudio(); } catch (e) { console.warn(e); }
+    };
+  }
   window.__game = { player, npcs, horses, critters, bull, tractor, harvest, day, camera, scene, renderer, cam, needs, rain, bus, truck, SHELTERS, net, remotes, race, racers };
   booted = true;
   applyNetSpawn();
