@@ -104,7 +104,6 @@ function terrainH(x, z) {
   let h = baseTerrain(x, z);
   for (const p of PADS) h += (p.h - h) * (1 - sstep(p.r, p.r + 16, Math.hypot(x - p.x, z - p.z)));
   h += (roadBed(x, z) - h) * roadShelf(x, z);
-  h += (RACE_Y - h) * raceShelf(x, z);
   return h;
 }
 function bldgMask(x, z) {
@@ -171,16 +170,10 @@ float roadShelf(vec2 p) {
   ${CORNERS.map((c) => `best = max(best, cornerCover(p, vec2(${f(c.x)}, ${f(c.z)}), vec2(${c.sx.toFixed(1)}, ${c.sz.toFixed(1)}), ${f(RING_IN - 10)}, ${f(RING_IN)}, ${f(RING_OUT)}, ${f(RING_OUT + 26)}));`).join('\n  ')}
   return best;
 }
-float raceShelf(vec2 p) {
-  float ox = max(${f(RACE_FIELD.x0)} - p.x, max(0.0, p.x - ${f(RACE_FIELD.x1)}));
-  float oz = max(${f(RACE_FIELD.z0)} - p.y, max(0.0, p.y - ${f(RACE_FIELD.z1)}));
-  return 1.0 - sstep(0.0, 16.0, length(vec2(ox, oz)));
-}
 float terrainH(vec2 p) {
   float h = baseTerrain(p);
   ${PADS.map((q) => `h += (${f(q.h)} - h) * (1.0 - sstep(${f(q.r)}, ${f(q.r + 16)}, length(p - vec2(${f(q.x)}, ${f(q.z)}))));`).join('\n  ')}
   h += (roadBed(p) - h) * roadShelf(p);
-  h += (${f(RACE_Y)} - h) * raceShelf(p);
   return h;
 }
 float rectMask(vec2 p, vec4 r, float e) {
@@ -207,7 +200,6 @@ float bldgMask(vec2 p) {
   return m;
 }
 float grassMask(vec2 p) { return (1.0 - wheatMask(p) * 0.97) * (1.0 - pathMask(p)) * (1.0 - roadMask(p)) * (1.0 - farmMask(p) * 0.6) * (1.0 - bldgMask(p)); }
-float raceMask(vec2 p) { return rectMask(p, ${rv(RACE_FIELD)}, 1.5); }
 `;
 
 function mulberry32(a) {
@@ -426,7 +418,6 @@ function buildGround(tex) {
         g = mix(g, vec3(lum) * vec3(2.3, 1.7, 0.75), wheatMask(wp) * 0.75);
         vec3 dirt = vec3(0.17, 0.11, 0.055) * (0.75 + tA.g * 1.4);
         g = mix(g, dirt, max(pathMask(wp) * 0.92, max(farmMask(wp), bldgMask(wp)) * 0.5));
-        g = mix(g, g * vec3(0.74, 1.2, 0.62), raceMask(wp) * 0.55);
         float rd = roadMask(wp);
         float grit = fract(sin(dot(floor(wp * 3.4), vec2(12.9898, 78.233))) * 43758.5453);
         vec3 asphalt = vec3(0.095, 0.100, 0.108) * (0.82 + grit * 0.26);
@@ -848,7 +839,7 @@ function drawEatRing(p) {
 
 function harvestOk(x, z) {
   if (Math.hypot(x, z) > WORLD_RADIUS - 20) return false;
-  if (wheatMask(x, z) > 0.15 || pathMask(x, z) > 0.15 || roadMask(x, z) > 0.2 || bldgMask(x, z) > 0.1 || rectMask(x, z, FARM_RECT, 0) > 0.5 || rectMask(x, z, RACE_FIELD, 0) > 0.5) return false;
+  if (wheatMask(x, z) > 0.15 || pathMask(x, z) > 0.15 || roadMask(x, z) > 0.2 || bldgMask(x, z) > 0.1 || rectMask(x, z, FARM_RECT, 0) > 0.5) return false;
   return !harvest.slots.some((h) => h.alive && Math.hypot(h.x - x, h.z - z) < 8);
 }
 
@@ -1809,7 +1800,7 @@ class DuckRig extends CowRig {
 
 // Hen mesh faces -Z; makeCritter turns it with faceYaw so it walks +Z like the cow.
 // Neck is Bone_014..010. Legs are high-stepping with a locked head bob.
-const HEN_SCALE = 0.26;
+const HEN_SCALE = 0.34;
 class HenRig extends CowRig {
   constructor(model) {
     super(model);
@@ -1989,8 +1980,8 @@ function initAudio() {
   for (let i = 0; i < len; i++) { last = last * 0.98 + (Math.random() * 2 - 1) * 0.02; d[i] = last * 6; }
   const noise = actx.createBufferSource(); noise.buffer = buf; noise.loop = true;
   const lp = actx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 500;
-  const wg = actx.createGain(); wg.gain.value = 0.019;
-  const lfo = actx.createOscillator(); lfo.frequency.value = 0.13; const lfoG = actx.createGain(); lfoG.gain.value = 0.011;
+  const wg = actx.createGain(); wg.gain.value = 0.003;
+  const lfo = actx.createOscillator(); lfo.frequency.value = 0.13; const lfoG = actx.createGain(); lfoG.gain.value = 0.001;
   lfo.connect(lfoG).connect(wg.gain); lfo.start();
   noise.connect(lp).connect(wg).connect(master); noise.start();
   const bird = () => {
@@ -2607,8 +2598,13 @@ function updateBull(b, dt, t) {
 }
 
 const horses = [];
-const HORSE_SPOTS = [[-10, 38], [0, -36], [42, 6]];
+const HORSE_HOME = { x: -22, z: 64, r: 9 };
+const HORSE_SPOTS = [[-28, 60], [-20, 66], [-14, 58]];
 const HORSE_EAT = 5, HORSE_RUN = 12;
+function horseSpot() {
+  const a = rand() * Math.PI * 2, d = 3 + rand() * (HORSE_HOME.r - 3);
+  return new V2(HORSE_HOME.x + Math.sin(a) * d, HORSE_HOME.z + Math.cos(a) * d);
+}
 
 function steerHorse(h, tx, tz, pace, dt) {
   const dx = tx - h.pos.x, dz = tz - h.pos.z;
@@ -2623,9 +2619,9 @@ function steerHorse(h, tx, tz, pace, dt) {
 function bolt(h, awayX, awayZ) {
   if (h.food && h.food.claimer === h) { h.food.claimer = null; h.food.chewing = false; }
   h.food = null; h.munch = 0;
-  let best = randomPastureSpot();
+  let best = horseSpot();
   for (let i = 0; i < 6; i++) {
-    const s = randomPastureSpot();
+    const s = horseSpot();
     const far = Math.hypot(s.x - h.pos.x, s.y - h.pos.z) > 22;
     const away = awayX == null || (s.x - h.pos.x) * awayX + (s.y - h.pos.z) * awayZ > 0;
     if (far && away) { best = s; break; }
@@ -2639,11 +2635,11 @@ function updateHorse(h, dt, t) {
   const pd = Math.hypot(player.pos.x - h.pos.x, player.pos.z - h.pos.z);
   if (h.state !== 'run' && started && pd < 3.6 && Math.abs(player.speed) > 3) bolt(h, h.pos.x - player.pos.x, h.pos.z - player.pos.z);
 
-  const food = h.state === 'run' ? null : foodFor(h);
+  const food = null;
   const reach = food ? Math.hypot(food.x - h.pos.x, food.z - h.pos.z) : 99;
   if (h.state === 'run') {
     const d = steerHorse(h, h.goal.x, h.goal.y, HORSE_RUN, dt);
-    if (d < 6 || h.timer < 0) { h.state = 'walk'; h.goal = randomPastureSpot(); h.timer = 20; }
+    if (d < 6 || h.timer < 0) { h.state = 'walk'; h.goal = horseSpot(); h.timer = 20; }
   } else if (food && reach < 2.1) {
     h.state = 'munch';
     food.chewing = true;
@@ -2669,7 +2665,7 @@ function updateHorse(h, dt, t) {
     h.turn *= 0.9;
     if (h.timer < 0) {
       if (rand() < 0.3) bolt(h);
-      else { h.state = 'walk'; h.goal = randomPastureSpot(); h.timer = 40; }
+      else { h.state = 'walk'; h.goal = horseSpot(); h.timer = 40; }
     }
   }
   h.eat += (((h.state === 'munch' || h.state === 'graze') && h.speed < 0.3 ? 1 : 0) - h.eat) * Math.min(1, dt * 1.6);
@@ -2723,12 +2719,12 @@ function updateCritter(a, dt, t) {
   a.model.position.z = a.rig.surge || 0;
 }
 
-// Hens wander the pasture and bolt as soon as anyone gets near. They always
+// Hens wander the pasture and only bolt once the player is right next to them. They always
 // outrun the player, and slide along a wall instead of getting cornered.
 function updateHen(a, dt, t) {
   const dx = a.pos.x - player.pos.x, dz = a.pos.z - player.pos.z;
   const dist = Math.hypot(dx, dz);
-  if (dist < 16) {
+  if (dist < 2.8) {
     a.state = 'flee';
     a.yaw = lerpAngle(a.yaw, Math.atan2(dx, dz), Math.min(1, dt * 9));
     a.speed += (13 - a.speed) * Math.min(1, dt * 7);
@@ -2857,7 +2853,7 @@ async function init() {
   }
   buildCardField(grassImp, carpet, { wrap: CARPET_TILE, ground: grassT });
   const tufts = [];
-  const okTuft = (x, z) => wheatMask(x, z) < 0.1 && pathMask(x, z) < 0.1 && roadMask(x, z) < 0.2 && rectMask(x, z, FARM_RECT, 0) < 0.5 && rectMask(x, z, RACE_FIELD, 2) < 0.5 && bldgMask(x, z) < 0.1 && Math.hypot(x - POND_AT.x, z - POND_AT.z) > 3.6 && !SHELTERS.some((s) => Math.hypot(x - s.x, z - s.z) < 5) && Math.hypot(x, z) < 330;
+  const okTuft = (x, z) => wheatMask(x, z) < 0.1 && pathMask(x, z) < 0.1 && roadMask(x, z) < 0.2 && rectMask(x, z, FARM_RECT, 0) < 0.5 && bldgMask(x, z) < 0.1 && Math.hypot(x - POND_AT.x, z - POND_AT.z) > 3.6 && !SHELTERS.some((s) => Math.hypot(x - s.x, z - s.z) < 5) && Math.hypot(x, z) < 330;
   for (let i = 0; i < 8000; i++) {
     const inside = i < 1500;
     const x = inside ? PASTURE.x0 + rand() * 120 : (rand() - 0.5) * 640, z = inside ? PASTURE.z0 + rand() * 92 : (rand() - 0.5) * 640;
@@ -2916,7 +2912,6 @@ async function init() {
     critters.push(a);
   });
   for (const c of [player, ...npcs, ...horses, ...critters]) placeCow(c, 1);
-  buildRace(baleG);
   const look = new V3(player.pos.x, player.pos.y + 1.35, player.pos.z);
   const off = new V3(6.7, 2.05, 5.3);
   const horiz = Math.hypot(off.x, off.z);
@@ -2932,17 +2927,14 @@ async function init() {
 
   loadBar.style.width = '100%';
   loadText.textContent = '';
-  const pick = document.getElementById('pick');
-  pick.style.display = 'flex';
-  pick.querySelectorAll('button').forEach((b) => {
-    b.onclick = () => {
-      become(b.dataset.role);
-      document.getElementById('intro').classList.add('hidden');
-      document.getElementById('hud').style.display = 'block';
-      started = true;
-      try { initAudio(); } catch (e) { console.warn(e); }
-    };
-  });
+  const play = document.getElementById('play');
+  play.style.display = 'block';
+  play.onclick = () => {
+    document.getElementById('intro').classList.add('hidden');
+    document.getElementById('hud').style.display = 'block';
+    started = true;
+    try { initAudio(); } catch (e) { console.warn(e); }
+  };
   window.__game = { player, npcs, horses, critters, bull, tractor, harvest, day, camera, scene, renderer, cam, needs, rain, bus, truck, SHELTERS, net, remotes, race, racers };
   booted = true;
   applyNetSpawn();
@@ -3307,7 +3299,6 @@ function frame() {
     if (a.kind === 'hen') updateHen(a, dt, t);
     else updateCritter(a, dt, t);
   }
-  if (started) updateRace(dt, t);
   updateTractor(dt);
   updateTruck(dt);
   updateBus(dt);
