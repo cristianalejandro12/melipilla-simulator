@@ -13,16 +13,8 @@ const EAST_GATE = { z0: -5, z1: 5 };
 const SOUTH_GATE = { x0: -5, x1: 5 };
 const FARM = { x: -32, z: -24, s: 9, groundY: -0.359 };
 const FARM_RECT = { x0: FARM.x - 9.3, x1: FARM.x + 8.7, z0: FARM.z - 8.6, z1: FARM.z + 8.7 };
-const WHEAT_FIELD = { x0: 66, x1: 200, z0: -75, z1: 75 };
-const WHEAT_PATCH = { x0: 22, x1: 52, z0: 18, z1: 40 };
-const WHEAT_PLOTS = [
-  WHEAT_FIELD,
-  WHEAT_PATCH,
-  { x0: -46, x1: -12, z0: 6, z1: 32 },
-  { x0: -230, x1: -160, z0: -20, z1: 35 },
-  { x0: -30, x1: 70, z0: -230, z1: -190 },
-  { x0: 230, x1: 310, z0: 30, z1: 80 },
-];
+const WHEAT_FIELD = { x0: 80, x1: 145, z0: -32, z1: 32 };
+const WHEAT_PLOTS = [WHEAT_FIELD];
 const PATH = { x0: 38, x1: 205, z0: -2.2, z1: 2.2 };
 // Ring road around the valley. Vehicles follow the centerline; asphalt is `half` meters either side.
 const RING = { x0: -360, x1: 360, z0: -150, z1: 160, half: 9, turn: 26 };
@@ -319,7 +311,7 @@ const U = {
 const loadBar = document.getElementById('loadBar');
 const loadText = document.getElementById('loadText');
 const progress = {};
-const EXPECTED = { cow: 5.8e6, farm: 2.3e6, wheat: 9.0e6, grass: 14.5e6, barn: 18.6e6, chapel: 8.7e6, windmill: 2.4e6, birch_mid: 3.2e6, birch_far: 0.9e6, bare: 0.55e6, house: 7.9e6, bale: 0.33e6, bull: 4.82e6, tractor: 6.7e6, harvest: 5.13e6, truck: 4.5e6, trough: 4.6e6, bus: 5.4e6, horse: 2.29e6, pig: 1.24e6, duck: 1.53e6, hen: 1.29e6, industria2: 5.2e7 };
+const EXPECTED = { cow: 5.8e6, farm: 2.3e6, wheat: 7.1e6, grass: 14.5e6, barn: 18.6e6, chapel: 8.7e6, windmill: 2.4e6, birch_mid: 3.2e6, birch_far: 0.9e6, bare: 0.55e6, house: 7.9e6, bale: 0.33e6, bull: 4.82e6, tractor: 6.7e6, harvest: 5.13e6, truck: 4.5e6, trough: 4.6e6, bus: 5.4e6, horse: 4.95e6, pig: 1.24e6, duck: 1.53e6, hen: 1.29e6, industria2: 5.2e7 };
 function updateProgress() {
   const total = Object.values(EXPECTED).reduce((a, b) => a + b, 0);
   const done = Object.entries(progress).reduce((a, [k, v]) => a + Math.min(v, EXPECTED[k]), 0);
@@ -327,7 +319,7 @@ function updateProgress() {
   loadText.textContent = `Cargando el campo… ${(done / 1e6).toFixed(1)} / ${(total / 1e6).toFixed(1)} MB`;
 }
 const gltfLoader = new GLTFLoader();
-const loadGLB = (name) => new Promise((res, rej) => gltfLoader.load(`assets/${name}.glb`, res, (e) => { progress[name] = e.loaded; updateProgress(); }, rej));
+const loadGLB = (name, file = `${name}.glb`) => new Promise((res, rej) => gltfLoader.load(`assets/${file}`, res, (e) => { progress[name] = e.loaded; updateProgress(); }, rej));
 const texLoader = new THREE.TextureLoader();
 const loadTex = (url) => new Promise((res, rej) => texLoader.load(url, res, undefined, rej));
 
@@ -711,17 +703,14 @@ function buildPastureFence() {
 }
 
 const BALES = [
-  { x: -17, z: -30, rot: 0.4 }, { x: -15.1, z: -31.5, rot: 1.3 }, { x: -16.9, z: -33, rot: 2.3 },
-  { x: -16.1, z: -31.1, rot: 0.7 }, { x: -16.1, z: -31.1, rot: 1.9, up: 1 },
-  { x: 8, z: -38, rot: 0.2 }, { x: 10.1, z: -36.8, rot: 1.7 }, { x: -48, z: 30, rot: 0.9 },
-  { x: 49.5, z: 68.6, rot: 0.5 }, { x: 51.6, z: 66.4, rot: 1.6 }, { x: 47.6, z: 67.2, rot: 2.4 },
-  { x: 58, z: 12, rot: 0.3 }, { x: 60.4, z: 13.6, rot: 1.2 },
+  { x: -17, z: -30, rot: 0.4 },
+  { x: -15.1, z: -31.5, rot: 1.3 },
 ];
 // ---------------------------------------------------------------------------
 // Tractor: drives a slow loop around the wheat field. The GLB is one mesh,
 // so the wheels are spun in the vertex shader by their position.
 // ---------------------------------------------------------------------------
-const TRACTOR = { s: 2.4, speed: 2.2, loop: { x0: 64, x1: 203, z0: -79, z1: 79, r: 9 } };
+const TRACTOR = { s: 2.4, speed: 2.2, loop: { x0: 72, x1: 153, z0: -40, z1: 40, r: 8 } };
 const tractor = { group: null, route: [], len: 0, dist: 0, yaw: 0, pitch: 0, roll: 0, pos: new V3(), uSpin: { value: 0 } };
 
 function buildTractor(gltf) {
@@ -1616,27 +1605,26 @@ function makeBull(gltf) {
     state: 'graze', timer: 3 + rand() * 6, goal: new V2() };
 }
 
-// Horse: same SmartRig family, but the model faces -X, so pitch is about Z and
-// roll about X. -Z is the horse's right side.
+// Horse: SmartRig facing +Z, like the cow. Pitch is about X and roll about Z.
 const HORSE_SCALE = 1.58;
-const HORSE_TAIL = ['Bone_009', 'Bone_008', 'Bone_007', 'Bone_006'];
+const HORSE_TAIL = ['Bone_012', 'Bone_011', 'Bone_010', 'Bone_009'];
 const HORSE_TINTS = [[1, 1, 1], [0.62, 0.58, 0.56], [1.15, 1.08, 0.98]];
 class HorseRig extends CowRig {
   constructor(model) {
     super(model);
     const leg = (a) => [`Bone_0${a}`, `Bone_0${a - 1}`, `Bone_0${a - 2}`, `Bone_0${a - 3}`];
     this.legs = [
-      { front: false, d: leg(21), walk: 0.0, trot: 0.0, run: 0.12 },
-      { front: true, d: leg(38), walk: 0.25, trot: 0.5, run: 0.55 },
-      { front: false, d: leg(15), walk: 0.5, trot: 0.5, run: 0.0 },
-      { front: true, d: leg(32), walk: 0.75, trot: 0.0, run: 0.42 },
+      { front: false, d: leg(26), walk: 0.0, trot: 0.0, run: 0.12 },
+      { front: true, d: leg(44), walk: 0.25, trot: 0.5, run: 0.55 },
+      { front: false, d: leg(19), walk: 0.5, trot: 0.5, run: 0.0 },
+      { front: true, d: leg(37), walk: 0.75, trot: 0.0, run: 0.42 },
     ];
     this.shake = 0; this.shakeT = 5 + Math.random() * 8;
     this.bounce = 0;
     // The neck is too short to reach the grass, so it stretches while grazing.
-    this.neck = ['Bone_025', 'Bone_024', 'Bone_023'].map((n) => ({ bone: this.bones[n], rest: this.bones[n].position.clone() }));
+    this.neck = ['Bone_029', 'Bone_028', 'Bone_027'].map((n) => ({ bone: this.bones[n], rest: this.bones[n].position.clone() }));
   }
-  P(name, pitch = 0, yaw = 0, roll = 0) { this.rot(name, roll, yaw, pitch); }
+  P(name, pitch = 0, yaw = 0, roll = 0) { this.rot(name, pitch, yaw, roll); }
   // speed in m/s of the scaled horse; the rig works in model units
   update(dt, t, { speed, eat = 0, turn = 0 }) {
     const s = Math.abs(speed / HORSE_SCALE);
@@ -1652,7 +1640,7 @@ class HorseRig extends CowRig {
       const sw = Math.sin(ph) * amp, lf = Math.max(0, -Math.cos(ph)) * lift;
       const [a, b, c, d] = L.d;
       if (L.front) {
-        const stance = eat * (L.d[0] === 'Bone_038' ? -0.22 : 0.08);
+        const stance = eat * (L.d[0] === 'Bone_044' ? -0.22 : 0.08);
         this.P(a, sw * 0.9 + stance);
         this.P(b, -lf * 0.55);
         this.P(c, lf * 1.5);
@@ -1680,10 +1668,10 @@ class HorseRig extends CowRig {
     const nod = bob * 0.07 * move * (1 - run) + Math.sin(cyc + 1.6) * 0.12 * run;
     this.chew += dt * 7;
     const chew = eat * 0.05 * Math.sin(this.chew);
-    this.P('Bone_026', eat * 1.2 + nod * 0.5 + run * 0.35 - this.shake * 0.25, this.look * 0.35);
-    this.P('Bone_025', eat * 0.6 + nod * 0.3, this.look * 0.3, toss * 0.12);
-    this.P('Bone_024', eat * 0.45 + nod * 0.2, this.look * 0.2 + toss * 0.2);
-    this.P('Bone_023', -eat * 1.05 + chew - run * 0.15, this.look * 0.15 + toss * 0.3, toss * 0.25);
+    this.P('Bone_030', eat * 1.2 + nod * 0.5 + run * 0.35 - this.shake * 0.25, this.look * 0.35);
+    this.P('Bone_029', eat * 0.6 + nod * 0.3, this.look * 0.3, toss * 0.12);
+    this.P('Bone_028', eat * 0.45 + nod * 0.2, this.look * 0.2 + toss * 0.2);
+    this.P('Bone_027', -eat * 1.05 + chew - run * 0.15, this.look * 0.15 + toss * 0.3, toss * 0.25);
     for (const n of this.neck) n.bone.position.copy(n.rest).multiplyScalar(1 + eat * 0.4);
 
     // Tail sway, fly swish, lifted at a gallop
@@ -1704,17 +1692,25 @@ function makeHorse(gltf, i) {
   model.traverse((o) => {
     if (!o.isMesh) return;
     o.castShadow = true; o.receiveShadow = true; o.frustumCulled = false;
-    o.material = o.material.clone(); o.material.metalness = 0;
+    o.material = o.material.clone();
+    o.material.metalness = 0;
+    o.material.roughness = 1;
+    o.material.envMapIntensity = 0;
     o.material.color.setRGB(...tint);
+    o.material.onBeforeCompile = (shader) => {
+      shader.fragmentShader = shader.fragmentShader.replace(
+        '#include <map_fragment>',
+        `#include <map_fragment>
+         float shine = max(diffuseColor.r, max(diffuseColor.g, diffuseColor.b));
+         diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(0.55, 0.4, 0.32), smoothstep(0.5, 0.92, shine));`
+      );
+    };
   });
   const rig = new HorseRig(model);
-  const face = new THREE.Group();
-  face.rotation.y = Math.PI / 2;
-  face.add(model);
   const group = new THREE.Group();
   group.rotation.order = 'YXZ';
   group.scale.setScalar(HORSE_SCALE);
-  group.add(face);
+  group.add(model);
   scene.add(group);
   return { group, model, rig, horse: true, role: 'horse', pos: new V3(), yaw: rand() * 6.28, speed: 0, turn: 0, eat: 0, pitch: 0,
     state: 'graze', timer: 2 + rand() * 6, goal: new V2(), munch: 0, seed: i * 7.3 };
@@ -1993,8 +1989,8 @@ function initAudio() {
   for (let i = 0; i < len; i++) { last = last * 0.98 + (Math.random() * 2 - 1) * 0.02; d[i] = last * 6; }
   const noise = actx.createBufferSource(); noise.buffer = buf; noise.loop = true;
   const lp = actx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 500;
-  const wg = actx.createGain(); wg.gain.value = 0.032;
-  const lfo = actx.createOscillator(); lfo.frequency.value = 0.13; const lfoG = actx.createGain(); lfoG.gain.value = 0.018;
+  const wg = actx.createGain(); wg.gain.value = 0.019;
+  const lfo = actx.createOscillator(); lfo.frequency.value = 0.13; const lfoG = actx.createGain(); lfoG.gain.value = 0.011;
   lfo.connect(lfoG).connect(wg.gain); lfo.start();
   noise.connect(lp).connect(wg).connect(master); noise.start();
   const bird = () => {
@@ -2004,7 +2000,7 @@ function initAudio() {
     for (let i = 0; i < n; i++) {
       const s = t + i * 0.14;
       o.frequency.setValueAtTime(base, s); o.frequency.exponentialRampToValueAtTime(base * 1.35, s + 0.05); o.frequency.exponentialRampToValueAtTime(base * 0.9, s + 0.1);
-      g.gain.setValueAtTime(0, s); g.gain.linearRampToValueAtTime(0.015, s + 0.02); g.gain.linearRampToValueAtTime(0, s + 0.1);
+      g.gain.setValueAtTime(0, s); g.gain.linearRampToValueAtTime(0.009, s + 0.02); g.gain.linearRampToValueAtTime(0, s + 0.1);
     }
     o.start(t); o.stop(t + n * 0.14 + 0.1);
     setTimeout(bird, 2500 + Math.random() * 7000);
@@ -2812,8 +2808,8 @@ function updateCamera(dt, t) {
 async function init() {
   connectNet();
   const [cowG, farmG, wheatG, grassG, barnG, chapelG, millG, birchMidG, birchFarG, bareG, houseG, baleG, bullG, tractorG, harvestG, truckG, troughG, busG, horseG, pigG, duckG, henG, plantaG, skyT, grassT, zzzT] = await Promise.all([
-    loadGLB('cow'), loadGLB('farm'), loadGLB('wheat'), loadGLB('grass'),
-    loadGLB('barn'), loadGLB('chapel'), loadGLB('windmill'), loadGLB('birch_mid'), loadGLB('birch_far'), loadGLB('bare'), loadGLB('house'), loadGLB('bale'), loadGLB('bull'), loadGLB('tractor'), loadGLB('harvest'), loadGLB('truck'), loadGLB('trough'), loadGLB('bus'), loadGLB('horse'), loadGLB('pig'), loadGLB('duck'), loadGLB('hen'), loadGLB('industria2'),
+    loadGLB('cow'), loadGLB('farm'), loadGLB('wheat', 'wheat.glb?v=2'), loadGLB('grass'),
+    loadGLB('barn'), loadGLB('chapel'), loadGLB('windmill'), loadGLB('birch_mid'), loadGLB('birch_far'), loadGLB('bare'), loadGLB('house'), loadGLB('bale'), loadGLB('bull'), loadGLB('tractor'), loadGLB('harvest'), loadGLB('truck'), loadGLB('trough'), loadGLB('bus'), loadGLB('horse', 'horse.glb?v=2'), loadGLB('pig'), loadGLB('duck'), loadGLB('hen'), loadGLB('industria2'),
     loadTex('assets/cielo_loop.jpg'), loadTex('assets/suelo.png'), loadTex('assets/zzz.png'),
   ]);
   loadText.textContent = 'Plantando el trigo…';
@@ -2836,15 +2832,10 @@ async function init() {
   buildBirches(birchMidG, birchFarG, pickTreeSpots());
   buildBareTrees(bareG);
 
-  // Wheat: impostor field + real 3D bunches flanking the path and the inner patch
+  // Wheat: impostor field + real 3D bunches flanking the path
   const wheatImp = makeImpostor(wheatG.scene, new THREE.Color('#b99a55'));
   const realWheat = [];
-  for (let x = 62; x < 80; x += 2.3) for (const side of [-1, 1]) realWheat.push({ x: x + rand() * 0.6, z: side * (3.4 + rand() * 0.8), rot: rand() * 6, k: 0.85 + rand() * 0.3 });
-  for (let i = 0; i < 6; i++) realWheat.push({ x: WHEAT_PATCH.x0 + 1 + rand() * 4, z: WHEAT_PATCH.z0 + 2 + i * 3.4, rot: rand() * 6, k: 0.9 + rand() * 0.2 });
-  for (const r of WHEAT_PLOTS) {
-    if (r === WHEAT_FIELD || r === WHEAT_PATCH) continue;
-    for (let i = 0; i < 8; i++) realWheat.push({ x: r.x0 + 3 + rand() * (r.x1 - r.x0 - 6), z: r.z0 + 3 + rand() * (r.z1 - r.z0 - 6), rot: rand() * 6, k: 0.85 + rand() * 0.3 });
-  }
+  for (let x = 84; x < 102; x += 2.3) for (const side of [-1, 1]) realWheat.push({ x: x + rand() * 0.6, z: side * (3.4 + rand() * 0.8), rot: rand() * 6, k: 0.85 + rand() * 0.3 });
   const wheatCards = [];
   for (const r of WHEAT_PLOTS) {
     for (let x = r.x0 - 2; x < r.x1 + 2; x += 0.62) for (let z = r.z0 - 2; z < r.z1 + 2; z += 0.62) {
